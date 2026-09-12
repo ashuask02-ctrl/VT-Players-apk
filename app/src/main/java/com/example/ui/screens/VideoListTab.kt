@@ -1,0 +1,565 @@
+package com.example.ui.screens
+
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.model.SortOrder
+import com.example.model.VideoItem
+import com.example.ui.components.VideoItemCard
+import com.example.ui.theme.VTAccentBlue
+import com.example.ui.theme.VTBlack
+import com.example.ui.theme.VTWhite
+import com.example.ui.viewmodel.VTViewModel
+
+@Composable
+fun VideoListTab(
+    viewModel: VTViewModel,
+    onPlayVideo: (VideoItem, List<VideoItem>) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val videos by viewModel.filteredVideos.collectAsState()
+    val recentRecords by viewModel.recentRecords.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
+    val selectedFolder by viewModel.selectedFolder.collectAsState()
+    val playlists by viewModel.playlists.collectAsState()
+
+    var showSortDialog by remember { mutableStateOf(false) }
+    var videoToAddToPlaylist by remember { mutableStateOf<VideoItem?>(null) }
+    var newPlaylistName by remember { mutableStateOf("") }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+
+    val colorScheme = MaterialTheme.colorScheme
+
+    // Permission launcher for local storage/media
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.refreshVideos()
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(colorScheme.background)
+    ) {
+        // Top Branding & Search Row
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colorScheme.primary)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "VT",
+                            color = colorScheme.onPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 18.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "VT PLAYER",
+                        color = colorScheme.onBackground,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                // Sort Button
+                IconButton(
+                    onClick = { showSortDialog = true },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                        .size(40.dp)
+                        .testTag("sort_button")
+                ) {
+                    Icon(
+                        Icons.Filled.Sort,
+                        contentDescription = "Sort",
+                        tint = colorScheme.onBackground
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                placeholder = {
+                    Text("Search videos by title...", color = colorScheme.onBackground.copy(alpha = 0.5f), fontWeight = FontWeight.Medium)
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Search, contentDescription = "Search", tint = colorScheme.onBackground)
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear", tint = colorScheme.onBackground)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colorScheme.primary,
+                    unfocusedBorderColor = colorScheme.outline,
+                    focusedTextColor = colorScheme.onBackground,
+                    unfocusedTextColor = colorScheme.onBackground
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("search_text_field")
+            )
+
+            // Active Folder Filter Indicator
+            if (selectedFolder != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(colorScheme.surfaceVariant)
+                        .border(1.dp, colorScheme.outline, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Folder: $selectedFolder",
+                        color = colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Clear folder filter",
+                        tint = colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { viewModel.setSelectedFolder(null) }
+                    )
+                }
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
+            // Storage permission grant banner
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colorScheme.surfaceVariant)
+                        .border(1.dp, colorScheme.outline, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Auto-Scan Device Videos",
+                            color = colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Tap Scan to index all device storage videos",
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                Manifest.permission.READ_MEDIA_VIDEO
+                            } else {
+                                Manifest.permission.READ_EXTERNAL_STORAGE
+                            }
+                            permissionLauncher.launch(perm)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colorScheme.primary,
+                            contentColor = colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Scan", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // Recently Played Carousel (if any records exist)
+            if (recentRecords.isNotEmpty() && searchQuery.isEmpty() && selectedFolder == null) {
+                item {
+                    Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.History, contentDescription = null, tint = colorScheme.onBackground, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Recently Played",
+                                color = colorScheme.onBackground,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(recentRecords.take(5)) { record ->
+                                val matchedVideo = videos.firstOrNull { it.uriString == record.uri }
+                                    ?: VideoItem(
+                                        id = record.id,
+                                        title = record.title,
+                                        uriString = record.uri,
+                                        duration = record.duration,
+                                        lastPosition = record.lastPosition,
+                                        folderName = record.folderName
+                                    )
+                                RecentVideoChip(
+                                    record = record,
+                                    onClick = { onPlayVideo(matchedVideo, listOf(matchedVideo)) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Videos Count Header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "All Videos (${videos.size})",
+                        color = colorScheme.onBackground,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 17.sp
+                    )
+                    Text(
+                        text = sortOrder.displayName,
+                        color = colorScheme.onBackground.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Video Items
+            items(videos, key = { it.id }) { video ->
+                VideoItemCard(
+                    video = video,
+                    onClick = { onPlayVideo(video, videos) },
+                    onFavoriteToggle = { viewModel.toggleFavorite(video) },
+                    onAddToPlaylist = { videoToAddToPlaylist = video },
+                    onHideToVault = { viewModel.hideVideo(video) }
+                )
+            }
+        }
+    }
+
+    // Sort Order Selection Dialog
+    if (showSortDialog) {
+        AlertDialog(
+            onDismissRequest = { showSortDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text("Sort Videos By", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = colorScheme.onSurface)
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SortOrder.values().forEach { order ->
+                        val isSelected = (order == sortOrder)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) colorScheme.primary else Color.Transparent)
+                                .clickable {
+                                    viewModel.setSortOrder(order)
+                                    showSortDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = order.displayName,
+                                color = if (isSelected) colorScheme.onPrimary else colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showSortDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Add to Playlist Dialog
+    videoToAddToPlaylist?.let { targetVideo ->
+        AlertDialog(
+            onDismissRequest = { videoToAddToPlaylist = null },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text("Add to Playlist", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = colorScheme.onSurface)
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = targetVideo.title,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (playlists.isEmpty()) {
+                        Text("No playlists yet. Create one below!", color = colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
+                    } else {
+                        playlists.forEach { pl ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        viewModel.addVideoToPlaylist(pl.id, targetVideo)
+                                        videoToAddToPlaylist = null
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(pl.name, fontWeight = FontWeight.Bold, color = colorScheme.onSurface, fontSize = 15.sp)
+                                Icon(Icons.Filled.Add, contentDescription = null, tint = colorScheme.onSurface)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { showCreatePlaylistDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Create New Playlist", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { videoToAddToPlaylist = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Cancel", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Create New Playlist Dialog
+    if (showCreatePlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreatePlaylistDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text("New Playlist", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = colorScheme.onSurface)
+            },
+            text = {
+                OutlinedTextField(
+                    value = newPlaylistName,
+                    onValueChange = { newPlaylistName = it },
+                    placeholder = { Text("Playlist Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newPlaylistName.isNotBlank()) {
+                            viewModel.createPlaylist(newPlaylistName.trim())
+                            newPlaylistName = ""
+                            showCreatePlaylistDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Create", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showCreatePlaylistDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant)
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun RecentVideoChip(
+    record: com.example.data.PlaybackRecordEntity,
+    onClick: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .width(180.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(colorScheme.surface)
+            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(10.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = colorScheme.onPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = record.title,
+                    color = colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            val progress = if (record.duration > 0) {
+                (record.lastPosition.toFloat() / record.duration.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = colorScheme.primary,
+                trackColor = colorScheme.outlineVariant
+            )
+        }
+    }
+}

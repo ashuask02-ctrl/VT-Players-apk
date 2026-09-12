@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Video Display Screen Bezel (Safe Zone ~ 66dp) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,30 L70,30 A10,10 0 0 1 80,40 L80,66 A10,10 0 0 1 70,76 L38,76 A10,10 0 0 1 28,66 L28,40 A10,10 0 0 1 38,30 Z" />
+
+    <!-- Centered Solid Media Play Triangle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,42 C46,40.5 47.7,39.5 49.0,40.3 L64.8,48.8 C66.2,49.6 66.2,51.4 64.8,52.2 L49.0,60.7 C47.7,61.5 46,60.5 46,59.0 Z" />
+
+    <!-- Media Playback Progress Track (Seekbar Background) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#50FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M35,70 L73,70" />
+
+    <!-- Active Media Playback Segment -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M35,70 L53,70" />
+
+    <!-- Media Playhead Scrubber Pip -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M53,68 A2,2 0 1,1 52.99,68 Z" />
+
+    <!-- Top-Left Video Framing / Viewfinder Accent -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#70FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M34,38 L34,35 L37,35" />
+
+    <!-- Top-Right Media Streaming / Live Indicator Pip -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M74,35 A1.8,1.8 0 1,1 73.99,35 Z" />
+</vector>

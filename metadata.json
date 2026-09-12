@@ -1,0 +1,6 @@
+{
+  "name": "VT Player",
+  "description": "High-performance video player with gestures, multi-track audio, subtitles, PiP, network streaming, and private vault in high-contrast Black & White design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
