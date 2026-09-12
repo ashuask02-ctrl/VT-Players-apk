@@ -27,12 +27,15 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.player.VideoPlayerScreen
@@ -59,12 +62,25 @@ fun VTMainScreen(
         else -> isSystemDark
     }
 
-    VTPlayerTheme(darkTheme = isDarkTheme) {
-        val currentTab by viewModel.currentTab.collectAsState()
-        val activePlayingVideo by viewModel.activePlayingVideo.collectAsState()
-        val colorScheme = MaterialTheme.colorScheme
+    val fontScale = when (prefs.fontSize) {
+        "SMALL" -> 0.85f
+        "LARGE" -> 1.20f
+        else -> 1.0f // "MEDIUM"
+    }
+    val currentDensity = LocalDensity.current
 
-        Box(modifier = modifier.fillMaxSize()) {
+    VTPlayerTheme(darkTheme = isDarkTheme) {
+        CompositionLocalProvider(
+            LocalDensity provides Density(
+                density = currentDensity.density,
+                fontScale = currentDensity.fontScale * fontScale
+            )
+        ) {
+            val currentTab by viewModel.currentTab.collectAsState()
+            val activePlayingVideo by viewModel.activePlayingVideo.collectAsState()
+            val colorScheme = MaterialTheme.colorScheme
+
+            Box(modifier = modifier.fillMaxSize()) {
             Scaffold(
                 bottomBar = {
                     if (activePlayingVideo == null) {
@@ -215,4 +231,5 @@ fun VTMainScreen(
             }
         }
     }
+}
 }

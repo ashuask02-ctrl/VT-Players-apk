@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
@@ -170,44 +171,141 @@ fun TracksDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Audio Tracks", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Quick Language Switcher for Audio (English & Hindi)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { playerManager.selectAudioByLanguage("en") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VTDarkCard,
+                            contentColor = VTWhite
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Text("English", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { playerManager.selectAudioByLanguage("hi") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VTDarkCard,
+                            contentColor = VTWhite
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Text("हिन्दी (Hindi)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
+
                 if (playerState.audioTracks.isEmpty()) {
-                    Text("Default Audio Track (Embedded)", color = Color(0xFFAAAAAA), fontSize = 13.sp)
+                    Text("Default Audio Track (Embedded Stereo)", color = Color(0xFFAAAAAA), fontSize = 13.sp)
                 } else {
                     playerState.audioTracks.forEach { track ->
                         val isSelected = track.id == playerState.selectedAudioTrackId
+                        val isHindi = track.language.contains("hi", ignoreCase = true) || track.label.contains("hindi", ignoreCase = true) || track.label.contains("हिन्दी")
+                        val isEnglish = track.language.contains("en", ignoreCase = true) || track.label.contains("english", ignoreCase = true)
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) VTDarkCard else Color.Transparent)
+                                .background(if (isSelected) VTWhite else VTDarkCard)
                                 .clickable { playerManager.selectAudioTrack(track) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${track.label} (${track.language})",
-                                color = if (isSelected) VTWhite else Color(0xFFCCCCCC),
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 14.sp
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = track.label,
+                                    color = if (isSelected) VTBlack else VTWhite,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
+                                val langTag = when {
+                                    isHindi -> "हिन्दी • Hindi"
+                                    isEnglish -> "English"
+                                    track.language.isNotBlank() && track.language != "Unknown" -> track.language
+                                    else -> "Embedded Audio"
+                                }
+                                Text(
+                                    text = langTag,
+                                    color = if (isSelected) Color(0xFF444444) else Color(0xFFAAAAAA),
+                                    fontSize = 11.sp
+                                )
+                            }
                             if (isSelected) {
-                                Icon(Icons.Filled.Check, contentDescription = null, tint = VTWhite, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = VTBlack, modifier = Modifier.size(20.dp))
                             }
                         }
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 HorizontalDivider(color = VTDarkBorder)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Subtitle Tracks Section
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Subtitles, contentDescription = null, tint = VTWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Subtitles", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Quick Language Switcher for Subtitles (English, Hindi & Off)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = { playerManager.selectSubtitleByLanguage("en") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VTDarkCard,
+                            contentColor = VTWhite
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Text("English", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { playerManager.selectSubtitleByLanguage("hi") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VTDarkCard,
+                            contentColor = VTWhite
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Text("हिन्दी", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { playerManager.selectSubtitleTrack(null) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (playerState.selectedSubtitleTrackId == null) VTWhite else VTDarkCard,
+                            contentColor = if (playerState.selectedSubtitleTrackId == null) VTBlack else VTWhite
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Text("Off", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -217,45 +315,63 @@ fun TracksDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSubDisabled) VTDarkCard else Color.Transparent)
+                        .background(if (isSubDisabled) VTWhite else VTDarkCard)
                         .clickable { playerManager.selectSubtitleTrack(null) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Subtitles Off",
-                        color = if (isSubDisabled) VTWhite else Color(0xFFCCCCCC),
-                        fontWeight = if (isSubDisabled) FontWeight.Bold else FontWeight.Normal,
+                        text = "Subtitles Off (कोई सबटाइटल नहीं)",
+                        color = if (isSubDisabled) VTBlack else Color(0xFFCCCCCC),
+                        fontWeight = if (isSubDisabled) FontWeight.ExtraBold else FontWeight.Normal,
                         fontSize = 14.sp
                     )
                     if (isSubDisabled) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = VTWhite, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = VTBlack, modifier = Modifier.size(20.dp))
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
 
                 playerState.subtitleTracks.forEach { track ->
                     val isSelected = track.id == playerState.selectedSubtitleTrackId
+                    val isHindi = track.language.contains("hi", ignoreCase = true) || track.label.contains("hindi", ignoreCase = true) || track.label.contains("हिन्दी")
+                    val isEnglish = track.language.contains("en", ignoreCase = true) || track.label.contains("english", ignoreCase = true)
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) VTDarkCard else Color.Transparent)
+                            .background(if (isSelected) VTWhite else VTDarkCard)
                             .clickable { playerManager.selectSubtitleTrack(track) }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "${track.label} (${track.language})",
-                            color = if (isSelected) VTWhite else Color(0xFFCCCCCC),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 14.sp
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = track.label,
+                                color = if (isSelected) VTBlack else VTWhite,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
+                                fontSize = 14.sp
+                            )
+                            val langTag = when {
+                                isHindi -> "हिन्दी • Hindi"
+                                isEnglish -> "English"
+                                track.language.isNotBlank() && track.language != "Unknown" -> track.language
+                                else -> "Embedded Subtitle"
+                            }
+                            Text(
+                                text = langTag,
+                                color = if (isSelected) Color(0xFF444444) else Color(0xFFAAAAAA),
+                                fontSize = 11.sp
+                            )
+                        }
                         if (isSelected) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = VTWhite, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = VTBlack, modifier = Modifier.size(20.dp))
                         }
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

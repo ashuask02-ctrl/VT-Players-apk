@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Lock
@@ -91,6 +93,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -105,6 +110,9 @@ import com.example.ui.theme.VTDarkCard
 import com.example.ui.theme.VTWhite
 import com.example.ui.viewmodel.VTViewModel
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -117,16 +125,40 @@ fun VideoPlayerScreen(
     val activity = context as? Activity
     val playerManager = viewModel.playerManager
     val playerState by playerManager.playerState.collectAsState()
+    val prefs by viewModel.preferences.collectAsState()
 
     var showSyncDialog by remember { mutableStateOf(false) }
     var showFrameStepper by remember { mutableStateOf(false) }
 
-    // Keep screen on during playback
-    DisposableEffect(Unit) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    // Keep screen on during playback, auto-switch to horizontal (landscape) for movie playback, and hide status bar
+    DisposableEffect(prefs.hideStatusBarInPlayer, prefs.movieOrientation) {
+        val window = activity?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Movie Play Screen in VT Player: show Horizontal (Landscape) by default, not Vertical
+        when (prefs.movieOrientation) {
+            "VERTICAL" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "AUTO" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            else -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+
+        val insetsController = window?.let { w ->
+            WindowCompat.getInsetsController(w, w.decorView)
+        }
+
+        if (prefs.hideStatusBarInPlayer) {
+            insetsController?.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            // Hide status bar (mobile signal, battery, and time line) and system navigation bar
+            insetsController?.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+
         onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            // Restore portrait on exit if rotated
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+            // Restore normal / portrait orientation on exit so library screens stay upright
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
@@ -158,6 +190,9 @@ fun VideoPlayerScreen(
     var hudBrightness by remember { mutableStateOf<Float?>(null) }
     var hudSeekDelta by remember { mutableStateOf<Long?>(null) }
     var hudSeekTarget by remember { mutableStateOf("") }
+    var hudZoomScale by remember { mutableStateOf<Float?>(null) }
+    var panX by remember { mutableFloatStateOf(0f) }
+    var panY by remember { mutableFloatStateOf(0f) }
 
     // Reset HUD timer helper
     var hudHideTrigger by remember { mutableLongStateOf(0L) }
@@ -167,6 +202,7 @@ fun VideoPlayerScreen(
             hudVolume = null
             hudBrightness = null
             hudSeekDelta = null
+            hudZoomScale = null
         }
     }
 
@@ -196,6 +232,8 @@ fun VideoPlayerScreen(
                     useController = false
                     this.resizeMode = resizeMode
                     player = playerManager.getExoPlayer()
+                    subtitleView?.setUserDefaultStyle()
+                    subtitleView?.setUserDefaultTextSize()
                 }
             },
             update = { playerView ->
@@ -206,7 +244,9 @@ fun VideoPlayerScreen(
                 .fillMaxSize()
                 .graphicsLayer(
                     scaleX = playerState.gestureZoomScale,
-                    scaleY = playerState.gestureZoomScale
+                    scaleY = playerState.gestureZoomScale,
+                    translationX = panX,
+                    translationY = panY
                 )
         )
 
@@ -214,12 +254,25 @@ fun VideoPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Transform gesture for Pinch-to-zoom
+                // Transform gesture for Pinch-to-zoom and Two-finger adjusting to scroll
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, _, zoom, _ ->
+                    detectTransformGestures { _, pan, zoom, _ ->
                         if (!playerState.isControlsLocked) {
-                            val newScale = (playerState.gestureZoomScale * zoom).coerceIn(0.75f, 3.0f)
-                            playerManager.setZoomScale(newScale)
+                            val currentScale = playerState.gestureZoomScale
+                            val newScale = (currentScale * zoom).coerceIn(0.5f, 4.0f)
+
+                            val maxPanX = if (newScale > 1f) (size.width * (newScale - 1f)) / 2f + 120f else 0f
+                            val maxPanY = if (newScale > 1f) (size.height * (newScale - 1f)) / 2f + 120f else 0f
+
+                            val newPanX = if (newScale > 1f) (panX + pan.x).coerceIn(-maxPanX, maxPanX) else 0f
+                            val newPanY = if (newScale > 1f) (panY + pan.y).coerceIn(-maxPanY, maxPanY) else 0f
+
+                            panX = newPanX
+                            panY = newPanY
+                            playerManager.setZoomAndPan(newScale, newPanX, newPanY)
+
+                            hudZoomScale = newScale
+                            hudHideTrigger = System.currentTimeMillis()
                         }
                     }
                 }
@@ -252,8 +305,16 @@ fun VideoPlayerScreen(
                                         hudHideTrigger = System.currentTimeMillis()
                                     }
                                     else -> {
-                                        // Center double tap: toggle play/pause
-                                        playerManager.togglePlayPause()
+                                        // Center double tap: reset screen size & scroll if zoomed, else toggle play/pause
+                                        if (playerState.gestureZoomScale > 1.05f || panX != 0f || panY != 0f) {
+                                            panX = 0f
+                                            panY = 0f
+                                            playerManager.resetZoomAndPan()
+                                            hudZoomScale = 1.0f
+                                            hudHideTrigger = System.currentTimeMillis()
+                                        } else {
+                                            playerManager.togglePlayPause()
+                                        }
                                     }
                                 }
                             }
@@ -374,6 +435,13 @@ fun VideoPlayerScreen(
                 modifier = Modifier.align(Alignment.Center)
             )
         }
+        hudZoomScale?.let { scale ->
+            ZoomScrollHUD(
+                zoomScale = scale,
+                isPanning = panX != 0f || panY != 0f,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
 
         // Lock/Unlock floating toggle (Always visible when locked, so user can unlock!)
         if (playerState.isControlsLocked) {
@@ -418,6 +486,9 @@ fun VideoPlayerScreen(
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
                     onAspectRatioClick = {
+                        panX = 0f
+                        panY = 0f
+                        playerManager.resetZoomAndPan()
                         val modes = AspectRatioMode.values()
                         val nextIdx = (playerState.aspectRatioMode.ordinal + 1) % modes.size
                         playerManager.setAspectRatioMode(modes[nextIdx])
@@ -448,12 +519,15 @@ fun VideoPlayerScreen(
                     onSpeedClick = { playerManager.setShowSpeedDialog(true) },
                     onRotateClick = {
                         activity?.let { act ->
-                            act.requestedOrientation = if (
-                                act.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                            ) {
+                            val current = act.requestedOrientation
+                            val isLandscape = current == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                            act.requestedOrientation = if (isLandscape) {
                                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                             } else {
-                                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                             }
                         }
                     },
@@ -577,26 +651,18 @@ fun PlayerTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(VTWhite)
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                ) {
-                    Text(
-                        text = "VT PLAYER",
-                        color = VTBlack,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 9.sp
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(VTWhite)
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+            ) {
                 Text(
-                    text = resolution,
-                    color = Color(0xFFCCCCCC),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "VT PLAYER",
+                    color = VTBlack,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 9.sp
                 )
             }
         }

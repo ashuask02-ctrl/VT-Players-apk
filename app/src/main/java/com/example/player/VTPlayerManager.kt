@@ -47,6 +47,9 @@ class VTPlayerManager(
         override fun onPlaybackStateChanged(playbackState: Int) {
             val isBuffering = playbackState == Player.STATE_BUFFERING
             val duration = exoPlayer?.duration?.coerceAtLeast(0L) ?: 0L
+            if (playbackState == Player.STATE_READY) {
+                exoPlayer?.currentTracks?.let { updateAvailableTracks(it) }
+            }
             _playerState.update {
                 it.copy(
                     isBuffering = isBuffering,
@@ -113,26 +116,58 @@ class VTPlayerManager(
 
     fun getExoPlayer(): ExoPlayer? = exoPlayer
 
+    companion object {
+        fun formatLanguageLabel(lang: String?, fallbackLabel: String): String {
+            val code = lang?.trim()?.lowercase(java.util.Locale.ROOT)
+            return when {
+                code == "hi" || code == "hin" -> "हिन्दी (Hindi)"
+                code == "en" || code == "eng" -> "English"
+                code == "es" || code == "spa" -> "Spanish"
+                code == "fr" || code == "fra" -> "French"
+                code == "de" || code == "deu" -> "German"
+                code == "ja" || code == "jpn" -> "Japanese"
+                code == "ko" || code == "kor" -> "Korean"
+                code == "zh" || code == "zho" -> "Chinese"
+                code == "ar" || code == "ara" -> "Arabic"
+                code == "bn" || code == "ben" -> "Bengali"
+                code == "ta" || code == "tam" -> "Tamil"
+                code == "te" || code == "tel" -> "Telugu"
+                code == "mr" || code == "mar" -> "Marathi"
+                code == "gu" || code == "guj" -> "Gujarati"
+                code == "pa" || code == "pan" -> "Punjabi"
+                code == "ur" || code == "urd" -> "Urdu"
+                code != null && code.length in 2..3 && code != "und" -> {
+                    val display = java.util.Locale.forLanguageTag(code).displayLanguage
+                    if (display.isNotBlank()) display else fallbackLabel
+                }
+                else -> fallbackLabel
+            }
+        }
+    }
+
     private fun updateAvailableTracks(tracks: Tracks) {
         val audioList = mutableListOf<TrackItem>()
         val subList = mutableListOf<TrackItem>()
         var selectedAudioId: String? = null
         var selectedSubId: String? = null
 
-        for (group in tracks.groups) {
+        tracks.groups.forEachIndexed { groupIndex, group ->
             val trackType = group.type
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
                 val isSelected = group.isTrackSelected(i)
-                val id = "${group.mediaTrackGroup.id}_$i"
-                val label = format.label ?: format.language ?: "Track ${i + 1}"
-                val lang = format.language ?: "Unknown"
+                val id = "${trackType}_${groupIndex}_$i"
+                val defaultLabel = format.label ?: if (trackType == C.TRACK_TYPE_AUDIO) "Audio Track ${audioList.size + 1}" else "Subtitle ${subList.size + 1}"
+                val rawLang = format.language ?: "Unknown"
+                val label = if (rawLang.isNotBlank() && rawLang != "Unknown" && rawLang != "und") {
+                    formatLanguageLabel(rawLang, defaultLabel)
+                } else defaultLabel
 
                 if (trackType == C.TRACK_TYPE_AUDIO) {
-                    audioList.add(TrackItem(id, label, lang, isSelected))
+                    audioList.add(TrackItem(id, label, rawLang, isSelected))
                     if (isSelected) selectedAudioId = id
                 } else if (trackType == C.TRACK_TYPE_TEXT) {
-                    subList.add(TrackItem(id, label, lang, isSelected))
+                    subList.add(TrackItem(id, label, rawLang, isSelected))
                     if (isSelected) selectedSubId = id
                 }
             }
@@ -142,8 +177,8 @@ class VTPlayerManager(
             it.copy(
                 audioTracks = audioList,
                 subtitleTracks = subList,
-                selectedAudioTrackId = selectedAudioId,
-                selectedSubtitleTrackId = selectedSubId
+                selectedAudioTrackId = selectedAudioId ?: it.selectedAudioTrackId,
+                selectedSubtitleTrackId = selectedSubId ?: it.selectedSubtitleTrackId
             )
         }
     }
@@ -268,7 +303,27 @@ class VTPlayerManager(
     }
 
     fun setZoomScale(scale: Float) {
-        _playerState.update { it.copy(gestureZoomScale = scale.coerceIn(0.5f, 3.0f)) }
+        _playerState.update { it.copy(gestureZoomScale = scale.coerceIn(0.5f, 4.0f)) }
+    }
+
+    fun setZoomAndPan(scale: Float, panX: Float, panY: Float) {
+        _playerState.update {
+            it.copy(
+                gestureZoomScale = scale.coerceIn(0.5f, 4.0f),
+                gesturePanX = panX,
+                gesturePanY = panY
+            )
+        }
+    }
+
+    fun resetZoomAndPan() {
+        _playerState.update {
+            it.copy(
+                gestureZoomScale = 1.0f,
+                gesturePanX = 0f,
+                gesturePanY = 0f
+            )
+        }
     }
 
     fun toggleControlsLock() {
@@ -327,11 +382,11 @@ class VTPlayerManager(
     // Track selections
     fun selectAudioTrack(trackItem: TrackItem) {
         val tracks = exoPlayer?.currentTracks ?: return
-        for (group in tracks.groups) {
+        tracks.groups.forEachIndexed { groupIndex, group ->
             if (group.type == C.TRACK_TYPE_AUDIO) {
                 for (i in 0 until group.length) {
-                    val id = "${group.mediaTrackGroup.id}_$i"
-                    if (id == trackItem.id) {
+                    val id = "${C.TRACK_TYPE_AUDIO}_${groupIndex}_$i"
+                    if (id == trackItem.id || "${group.mediaTrackGroup.id}_$i" == trackItem.id) {
                         trackSelector.setParameters(
                             trackSelector.buildUponParameters()
                                 .setOverrideForType(
@@ -358,18 +413,14 @@ class VTPlayerManager(
         }
 
         val tracks = exoPlayer?.currentTracks ?: return
-        trackSelector.setParameters(
-            trackSelector.buildUponParameters()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-        )
-
-        for (group in tracks.groups) {
+        tracks.groups.forEachIndexed { groupIndex, group ->
             if (group.type == C.TRACK_TYPE_TEXT) {
                 for (i in 0 until group.length) {
-                    val id = "${group.mediaTrackGroup.id}_$i"
-                    if (id == trackItem.id) {
+                    val id = "${C.TRACK_TYPE_TEXT}_${groupIndex}_$i"
+                    if (id == trackItem.id || "${group.mediaTrackGroup.id}_$i" == trackItem.id) {
                         trackSelector.setParameters(
                             trackSelector.buildUponParameters()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                 .setOverrideForType(
                                     TrackSelectionOverride(group.mediaTrackGroup, i)
                                 )
@@ -380,6 +431,77 @@ class VTPlayerManager(
                 }
             }
         }
+    }
+
+    fun selectAudioByLanguage(langPrefix: String): Boolean {
+        val target = langPrefix.lowercase(java.util.Locale.ROOT)
+        val match = _playerState.value.audioTracks.firstOrNull {
+            it.language.lowercase().startsWith(target) ||
+            it.label.lowercase().contains(target) ||
+            (target == "hi" && (it.language.lowercase() in listOf("hi", "hin") || it.label.lowercase().contains("hindi") || it.label.contains("हिन्दी"))) ||
+            (target == "en" && (it.language.lowercase() in listOf("en", "eng") || it.label.lowercase().contains("english")))
+        }
+        if (match != null) {
+            selectAudioTrack(match)
+            return true
+        }
+        return false
+    }
+
+    fun selectSubtitleByLanguage(langPrefix: String): Boolean {
+        val target = langPrefix.lowercase(java.util.Locale.ROOT)
+        val match = _playerState.value.subtitleTracks.firstOrNull {
+            it.language.lowercase().startsWith(target) ||
+            it.label.lowercase().contains(target) ||
+            (target == "hi" && (it.language.lowercase() in listOf("hi", "hin") || it.label.lowercase().contains("hindi") || it.label.contains("हिन्दी"))) ||
+            (target == "en" && (it.language.lowercase() in listOf("en", "eng") || it.label.lowercase().contains("english")))
+        }
+        if (match != null) {
+            selectSubtitleTrack(match)
+            return true
+        }
+        return false
+    }
+
+    fun cycleAudioTrack(): String {
+        val tracks = _playerState.value.audioTracks
+        if (tracks.isEmpty()) return "Audio: Default"
+        val currentIdx = tracks.indexOfFirst { it.id == _playerState.value.selectedAudioTrackId }
+        val nextIdx = (currentIdx + 1) % tracks.size
+        val nextTrack = tracks[nextIdx]
+        selectAudioTrack(nextTrack)
+        return nextTrack.label
+    }
+
+    fun cycleSubtitleTrack(): String {
+        val tracks = _playerState.value.subtitleTracks
+        if (tracks.isEmpty()) return "Subtitles: None"
+        if (_playerState.value.selectedSubtitleTrackId == null) {
+            selectSubtitleTrack(tracks.first())
+            return tracks.first().label
+        }
+        val currentIdx = tracks.indexOfFirst { it.id == _playerState.value.selectedSubtitleTrackId }
+        if (currentIdx == tracks.size - 1) {
+            selectSubtitleTrack(null)
+            return "Subtitles: Off"
+        } else {
+            val nextTrack = tracks[currentIdx + 1]
+            selectSubtitleTrack(nextTrack)
+            return nextTrack.label
+        }
+    }
+
+    fun getActiveAudioTrackLabel(): String {
+        val state = _playerState.value
+        val current = state.audioTracks.firstOrNull { it.id == state.selectedAudioTrackId }
+        return current?.label ?: if (state.audioTracks.isNotEmpty()) state.audioTracks.first().label else "Audio: Default"
+    }
+
+    fun getActiveSubtitleTrackLabel(): String {
+        val state = _playerState.value
+        if (state.selectedSubtitleTrackId == null) return "Sub: Off"
+        val current = state.subtitleTracks.firstOrNull { it.id == state.selectedSubtitleTrackId }
+        return current?.label ?: "Sub: Active"
     }
 
     // Audio delay & Subtitle delay

@@ -58,5 +58,8 @@ data class PlayerPreferencesEntity(
     val audioBoost: Boolean = false,
     val pinCode: String = "",
     val themeMode: String = "SYSTEM", // "SYSTEM", "DARK", "LIGHT"
-    val language: String = "EN"
+    val language: String = "EN",
+    val fontSize: String = "MEDIUM", // "SMALL", "MEDIUM", "LARGE"
+    val hideStatusBarInPlayer: Boolean = true, // Hide mobile signal, battery, and time line in player
+    val movieOrientation: String = "HORIZONTAL" // "HORIZONTAL", "VERTICAL", "AUTO"
 )

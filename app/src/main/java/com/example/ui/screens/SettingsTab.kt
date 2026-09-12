@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +68,9 @@ fun SettingsTab(
     val colorScheme = MaterialTheme.colorScheme
 
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showFontSizeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showOrientationDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -111,6 +114,16 @@ fun SettingsTab(
                     )
                     HorizontalDivider(color = colorScheme.outlineVariant)
                     SettingsRow(
+                        title = "Font Size / फ़ॉन्ट साइज़",
+                        subtitle = when (prefs.fontSize) {
+                            "SMALL" -> "Small (Compact text)"
+                            "LARGE" -> "Large (High readability)"
+                            else -> "Medium (Standard default)"
+                        },
+                        onClick = { showFontSizeDialog = true }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsRow(
                         title = "Language / भाषा",
                         subtitle = if (prefs.language == "HI") "हिन्दी (Hindi)" else "English",
                         onClick = { showLanguageDialog = true }
@@ -120,8 +133,27 @@ fun SettingsTab(
 
             // Playback Options
             item {
-                SettingsSectionHeader("Default Playback", Icons.Filled.PlayCircleOutline)
+                SettingsSectionHeader("Default Playback & Screen", Icons.Filled.PlayCircleOutline)
                 SettingsCard {
+                    SettingsRow(
+                        title = "Movie Screen Orientation",
+                        subtitle = when (prefs.movieOrientation) {
+                            "VERTICAL" -> "Vertical (Portrait)"
+                            "AUTO" -> "Auto Sensor (Follows device)"
+                            else -> "Horizontal (Landscape - Default)"
+                        },
+                        onClick = { showOrientationDialog = true }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsSwitchRow(
+                        title = "Clean Movie Screen (Hide Signal & Time)",
+                        subtitle = "Do not show top mobile signal, battery and time line during video playback",
+                        checked = prefs.hideStatusBarInPlayer,
+                        onCheckedChange = { chk ->
+                            viewModel.setHideStatusBarInPlayer(chk)
+                        }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
                     SettingsSwitchRow(
                         title = "Resume From Last Position",
                         subtitle = "Remember playback timestamps automatically",
@@ -294,6 +326,91 @@ fun SettingsTab(
         )
     }
 
+    // Font Size Selection Dialog
+    if (showFontSizeDialog) {
+        val fontSizes = listOf(
+            "SMALL" to ("Small (छोटा)" to "Compact text, fits more content per screen"),
+            "MEDIUM" to ("Medium (मध्यम)" to "Standard balanced font size for all screens"),
+            "LARGE" to ("Large (बड़ा)" to "High legibility, larger text and subtitles")
+        )
+        AlertDialog(
+            onDismissRequest = { showFontSizeDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Select Font Size",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    fontSizes.forEach { (key, info) ->
+                        val (label, description) = info
+                        val isSelected = (key == prefs.fontSize)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.setFontSize(key)
+                                    showFontSizeDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = label,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = when (key) {
+                                        "SMALL" -> 14.sp
+                                        "LARGE" -> 19.sp
+                                        else -> 16.sp
+                                    },
+                                    color = colorScheme.onSurface
+                                )
+                                Text(
+                                    text = description,
+                                    fontSize = 11.sp,
+                                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showFontSizeDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colorScheme.primary,
+                        contentColor = colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     // Language Dialog
     if (showLanguageDialog) {
         val langs = listOf("EN" to "English", "HI" to "हिन्दी (Hindi)")
@@ -366,6 +483,84 @@ fun SettingsTab(
                     colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant)
                 ) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Movie Screen Orientation Dialog
+    if (showOrientationDialog) {
+        val orientations = listOf(
+            "HORIZONTAL" to ("Horizontal (Landscape)" to "Plays movies horizontally. Recommended for widescreen cinema viewing"),
+            "AUTO" to ("Auto Sensor" to "Screen flips horizontally or vertically depending on how you hold the device"),
+            "VERTICAL" to ("Vertical (Portrait)" to "Plays videos upright vertically")
+        )
+        AlertDialog(
+            onDismissRequest = { showOrientationDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Movie Screen Orientation",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    orientations.forEach { (key, info) ->
+                        val (label, description) = info
+                        val isSelected = (key == prefs.movieOrientation)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.setMovieOrientation(key)
+                                    showOrientationDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = label,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = colorScheme.onSurface
+                                )
+                                Text(
+                                    text = description,
+                                    fontSize = 11.sp,
+                                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showOrientationDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
                 }
             }
         )

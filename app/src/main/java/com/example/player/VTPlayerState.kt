@@ -23,6 +23,8 @@ data class VTPlayerState(
     val gestureVolume: Float? = null,     // 0f..1f
     val gestureSeekDeltaSec: Long? = null,
     val gestureZoomScale: Float = 1.0f,
+    val gesturePanX: Float = 0.0f,
+    val gesturePanY: Float = 0.0f,
     // A-B Repeat
     val isAbRepeatActive: Boolean = false,
     val repeatPointA: Long? = null,

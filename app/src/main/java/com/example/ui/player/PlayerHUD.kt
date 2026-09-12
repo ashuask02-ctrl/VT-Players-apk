@@ -20,9 +20,11 @@ import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -135,3 +137,44 @@ fun SeekHUD(
         }
     }
 }
+
+@Composable
+fun ZoomScrollHUD(
+    zoomScale: Float,
+    isPanning: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val percent = (zoomScale * 100).toInt()
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(VTBlack.copy(alpha = 0.88f))
+            .border(1.5.dp, VTWhite, RoundedCornerShape(16.dp))
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = if (zoomScale <= 1.05f && zoomScale >= 0.95f) Icons.Filled.FitScreen else Icons.Filled.ZoomIn,
+                contentDescription = "Screen Size",
+                tint = VTWhite,
+                modifier = Modifier.size(34.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Screen Size: $percent%",
+                color = VTWhite,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (zoomScale > 1.05f) "Two fingers: Pinch to zoom • Drag to scroll" else "Two fingers: Pinch to adjust screen size",
+                color = Color(0xFFCCCCCC),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+

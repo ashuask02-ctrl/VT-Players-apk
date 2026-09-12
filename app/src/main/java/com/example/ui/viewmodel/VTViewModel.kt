@@ -333,6 +333,18 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setFontSize(size: String) {
+        updatePreferences { it.copy(fontSize = size) }
+    }
+
+    fun setHideStatusBarInPlayer(hide: Boolean) {
+        updatePreferences { it.copy(hideStatusBarInPlayer = hide) }
+    }
+
+    fun setMovieOrientation(orientation: String) {
+        updatePreferences { it.copy(movieOrientation = orientation) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         playerManager.release()
