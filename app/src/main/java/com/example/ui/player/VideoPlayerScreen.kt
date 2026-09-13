@@ -14,13 +14,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -194,6 +197,10 @@ fun VideoPlayerScreen(
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
 
+    // Tap tracking for single & double tap without conflicting with scroll gestures
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var lastTapOffset by remember { mutableStateOf(Offset.Zero) }
+
     // Reset HUD timer helper
     var hudHideTrigger by remember { mutableLongStateOf(0L) }
     LaunchedEffect(hudHideTrigger) {
@@ -250,155 +257,188 @@ fun VideoPlayerScreen(
                 )
         )
 
-        // Gestures Layer (Pointer input for double tap, drag volume/brightness/seek, pinch zoom)
+        // Gestures Layer (Unified single pointer handler for tap, double-tap, vertical drag volume/brightness, horizontal seek, and 2-finger zoom)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Transform gesture for Pinch-to-zoom and Two-finger adjusting to scroll
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        if (!playerState.isControlsLocked) {
-                            val currentScale = playerState.gestureZoomScale
-                            val newScale = (currentScale * zoom).coerceIn(0.5f, 4.0f)
+                .pointerInput(prefs.volumeGesture, prefs.brightnessGesture, prefs.swipeSeekGesture) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val downOffset = down.position
+                        val startTime = System.currentTimeMillis()
+                        var isDrag = false
+                        var dragMode = 0 // 0: undecided, 1: brightness, 2: volume, 3: seek, 4: pinch_zoom
+                        val touchSlop = viewConfiguration.touchSlop
+                        val screenWidth = size.width.toFloat()
+                        val screenHeight = size.height.toFloat()
 
-                            val maxPanX = if (newScale > 1f) (size.width * (newScale - 1f)) / 2f + 120f else 0f
-                            val maxPanY = if (newScale > 1f) (size.height * (newScale - 1f)) / 2f + 120f else 0f
+                        // Initialize continuous floating-point volume starting from current stream volume
+                        val initialVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                        var currentFloatVol = initialVol
 
-                            val newPanX = if (newScale > 1f) (panX + pan.x).coerceIn(-maxPanX, maxPanX) else 0f
-                            val newPanY = if (newScale > 1f) (panY + pan.y).coerceIn(-maxPanY, maxPanY) else 0f
+                        val window = activity?.window
+                        val currentWinBrightness = window?.attributes?.screenBrightness ?: -1f
+                        val initialBrightness = if (currentWinBrightness < 0f) 0.5f else currentWinBrightness
+                        var currentFloatBrightness = initialBrightness
 
-                            panX = newPanX
-                            panY = newPanY
-                            playerManager.setZoomAndPan(newScale, newPanX, newPanY)
+                        val initialPosition = playerState.currentPosition
+                        var seekDeltaSec = 0L
 
-                            hudZoomScale = newScale
-                            hudHideTrigger = System.currentTimeMillis()
-                        }
-                    }
-                }
-                // Tap gestures for single tap (toggle controls) and double tap (seek or play/pause)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
+                        do {
+                            val event = awaitPointerEvent()
+                            val activePointers = event.changes.filter { it.pressed }
+
                             if (playerState.isControlsLocked) {
-                                playerManager.setControlsVisibility(true)
-                            } else {
-                                playerManager.toggleControlsVisibility()
+                                continue
                             }
-                        },
-                        onDoubleTap = { offset ->
-                            if (!playerState.isControlsLocked) {
-                                val width = size.width
-                                when {
-                                    offset.x < width * 0.35f -> {
-                                        // Left double tap: seek -10s
-                                        playerManager.seekBy(-10000)
-                                        hudSeekDelta = -10L
-                                        hudSeekTarget = playerState.formattedCurrentTime
-                                        hudHideTrigger = System.currentTimeMillis()
-                                    }
-                                    offset.x > width * 0.65f -> {
-                                        // Right double tap: seek +10s
-                                        playerManager.seekBy(10000)
-                                        hudSeekDelta = 10L
-                                        hudSeekTarget = playerState.formattedCurrentTime
-                                        hudHideTrigger = System.currentTimeMillis()
-                                    }
-                                    else -> {
-                                        // Center double tap: reset screen size & scroll if zoomed, else toggle play/pause
-                                        if (playerState.gestureZoomScale > 1.05f || panX != 0f || panY != 0f) {
-                                            panX = 0f
-                                            panY = 0f
-                                            playerManager.resetZoomAndPan()
-                                            hudZoomScale = 1.0f
-                                            hudHideTrigger = System.currentTimeMillis()
+
+                            if (activePointers.size >= 2) {
+                                // Multi-finger pinch-to-zoom & pan
+                                isDrag = true
+                                dragMode = 4
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
+
+                                val currentScale = playerState.gestureZoomScale
+                                val newScale = (currentScale * zoomChange).coerceIn(0.5f, 4.0f)
+                                val maxPanX = if (newScale > 1f) (screenWidth * (newScale - 1f)) / 2f + 120f else 0f
+                                val maxPanY = if (newScale > 1f) (screenHeight * (newScale - 1f)) / 2f + 120f else 0f
+                                val newPanX = if (newScale > 1f) (panX + panChange.x).coerceIn(-maxPanX, maxPanX) else 0f
+                                val newPanY = if (newScale > 1f) (panY + panChange.y).coerceIn(-maxPanY, maxPanY) else 0f
+                                panX = newPanX
+                                panY = newPanY
+                                playerManager.setZoomAndPan(newScale, newPanX, newPanY)
+                                hudZoomScale = newScale
+                                hudHideTrigger = 0L
+
+                                event.changes.forEach { it.consume() }
+                            } else if (activePointers.size == 1 && dragMode != 4) {
+                                val pointer = activePointers.first()
+                                val currentPos = pointer.position
+                                val totalDragX = currentPos.x - downOffset.x
+                                val totalDragY = currentPos.y - downOffset.y
+
+                                if (!isDrag) {
+                                    val absX = kotlin.math.abs(totalDragX)
+                                    val absY = kotlin.math.abs(totalDragY)
+                                    if (absX > touchSlop || absY > touchSlop) {
+                                        isDrag = true
+                                        if (absX > absY) {
+                                            if (prefs.swipeSeekGesture) dragMode = 3
                                         } else {
-                                            playerManager.togglePlayPause()
+                                            if (downOffset.x < screenWidth * 0.5f) {
+                                                if (prefs.brightnessGesture) dragMode = 1
+                                            } else {
+                                                if (prefs.volumeGesture) dragMode = 2
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (isDrag) {
+                                    pointer.consume()
+                                    when (dragMode) {
+                                        1 -> {
+                                            // Brightness (Left Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
+                                            val dragUpDistance = downOffset.y - currentPos.y
+                                            val fraction = dragUpDistance / (screenHeight * 0.55f)
+                                            currentFloatBrightness = (initialBrightness + fraction).coerceIn(0.01f, 1.0f)
+                                            window?.let { w ->
+                                                val lp = w.attributes
+                                                lp.screenBrightness = currentFloatBrightness
+                                                w.attributes = lp
+                                            }
+                                            hudBrightness = currentFloatBrightness
+                                            hudHideTrigger = 0L
+                                        }
+                                        2 -> {
+                                            // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
+                                            val dragUpDistance = downOffset.y - currentPos.y
+                                            val fraction = dragUpDistance / (screenHeight * 0.55f)
+                                            currentFloatVol = (initialVol + fraction * maxVolume).coerceIn(0f, maxVolume)
+                                            val intVol = kotlin.math.round(currentFloatVol).toInt().coerceIn(0, maxVolume.toInt())
+                                            try {
+                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, intVol, 0)
+                                            } catch (_: Exception) {}
+                                            hudVolume = (currentFloatVol / maxVolume).coerceIn(0f, 1f)
+                                            hudHideTrigger = 0L
+                                        }
+                                        3 -> {
+                                            // Horizontal Seek
+                                            val fraction = totalDragX / (screenWidth * 0.40f)
+                                            seekDeltaSec = (fraction * 90f).toLong()
+                                            hudSeekDelta = seekDeltaSec
+                                            val targetMs = (initialPosition + seekDeltaSec * 1000L).coerceIn(0L, playerState.duration)
+                                            hudSeekTarget = formatMs(targetMs)
+                                            hudHideTrigger = 0L
                                         }
                                     }
                                 }
                             }
-                        }
-                    )
-                }
-                // Drag gestures for left (brightness), right (volume), horizontal (seek)
-                .pointerInput(Unit) {
-                    var dragStartOffset = androidx.compose.ui.geometry.Offset.Zero
-                    var initialDragType: Int = 0 // 1: brightness, 2: volume, 3: horizontal seek
-                    var totalDragX = 0f
-                    var initialPosition = 0L
+                        } while (event.changes.any { it.pressed })
 
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            dragStartOffset = offset
-                            totalDragX = 0f
-                            initialPosition = playerState.currentPosition
-                            initialDragType = 0
-                        },
-                        onDragEnd = {
-                            if (initialDragType == 3 && hudSeekDelta != null) {
-                                playerManager.seekTo(initialPosition + (hudSeekDelta!! * 1000L))
+                        // When user lifts finger:
+                        if (isDrag) {
+                            if (dragMode == 3 && seekDeltaSec != 0L) {
+                                val finalTarget = (initialPosition + (seekDeltaSec * 1000L)).coerceIn(0L, playerState.duration)
+                                playerManager.seekTo(finalTarget)
                             }
                             hudHideTrigger = System.currentTimeMillis()
-                            initialDragType = 0
-                        },
-                        onDragCancel = {
-                            hudHideTrigger = System.currentTimeMillis()
-                            initialDragType = 0
-                        },
-                        onDrag = { change, dragAmount ->
-                            if (playerState.isControlsLocked) return@detectDragGestures
-                            change.consume()
+                        } else {
+                            // Finger lifted without dragging: It's a TAP
+                            val tapDuration = System.currentTimeMillis() - startTime
+                            if (tapDuration < 400L) {
+                                val now = System.currentTimeMillis()
+                                val timeSinceLastTap = now - lastTapTime
+                                val distSq = (downOffset.x - lastTapOffset.x) * (downOffset.x - lastTapOffset.x) +
+                                    (downOffset.y - lastTapOffset.y) * (downOffset.y - lastTapOffset.y)
 
-                            val screenWidth = size.width
-                            val screenHeight = size.height
-
-                            // Determine drag type if not locked yet
-                            if (initialDragType == 0) {
-                                if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y) * 1.5f) {
-                                    initialDragType = 3 // Horizontal seek
-                                } else if (kotlin.math.abs(dragAmount.y) > 10f) {
-                                    initialDragType = if (dragStartOffset.x < screenWidth / 2) 1 else 2
-                                }
-                            }
-
-                            when (initialDragType) {
-                                1 -> {
-                                    // Brightness (Left Side)
-                                    val delta = -dragAmount.y / screenHeight
-                                    val window = activity?.window
-                                    val currentBrightness = window?.attributes?.screenBrightness ?: 0.5f
-                                    val normalized = if (currentBrightness < 0) 0.5f else currentBrightness
-                                    val newBrightness = (normalized + delta).coerceIn(0.01f, 1.0f)
-                                    window?.let { w ->
-                                        val lp = w.attributes
-                                        lp.screenBrightness = newBrightness
-                                        w.attributes = lp
+                                if (timeSinceLastTap < 350L && distSq < (touchSlop * 4f) * (touchSlop * 4f)) {
+                                    // DOUBLE TAP
+                                    lastTapTime = 0L
+                                    if (!playerState.isControlsLocked) {
+                                        when {
+                                            downOffset.x < screenWidth * 0.35f -> {
+                                                // Left double tap: seek -10s
+                                                playerManager.seekBy(-10000)
+                                                hudSeekDelta = -10L
+                                                hudSeekTarget = playerState.formattedCurrentTime
+                                                hudHideTrigger = System.currentTimeMillis()
+                                            }
+                                            downOffset.x > screenWidth * 0.65f -> {
+                                                // Right double tap: seek +10s
+                                                playerManager.seekBy(10000)
+                                                hudSeekDelta = 10L
+                                                hudSeekTarget = playerState.formattedCurrentTime
+                                                hudHideTrigger = System.currentTimeMillis()
+                                            }
+                                            else -> {
+                                                // Center double tap: reset screen size if zoomed, else toggle play/pause
+                                                if (playerState.gestureZoomScale > 1.05f || panX != 0f || panY != 0f) {
+                                                    panX = 0f
+                                                    panY = 0f
+                                                    playerManager.resetZoomAndPan()
+                                                    hudZoomScale = 1.0f
+                                                    hudHideTrigger = System.currentTimeMillis()
+                                                } else {
+                                                    playerManager.togglePlayPause()
+                                                }
+                                            }
+                                        }
                                     }
-                                    hudBrightness = newBrightness
-                                    hudHideTrigger = 0L
-                                }
-                                2 -> {
-                                    // Volume (Right Side)
-                                    val delta = -dragAmount.y / (screenHeight * 0.75f)
-                                    val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
-                                    val newVol = (currentVol + delta * maxVolume).coerceIn(0f, maxVolume)
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol.toInt(), 0)
-                                    hudVolume = newVol / maxVolume
-                                    hudHideTrigger = 0L
-                                }
-                                3 -> {
-                                    // Horizontal Seek
-                                    totalDragX += dragAmount.x
-                                    val deltaSec = (totalDragX / 15f).toLong()
-                                    hudSeekDelta = deltaSec
-                                    val targetMs = (initialPosition + deltaSec * 1000L).coerceIn(0L, playerState.duration)
-                                    hudSeekTarget = formatMs(targetMs)
-                                    hudHideTrigger = 0L
+                                } else {
+                                    // SINGLE TAP
+                                    lastTapTime = now
+                                    lastTapOffset = downOffset
+                                    if (playerState.isControlsLocked) {
+                                        playerManager.setControlsVisibility(true)
+                                    } else {
+                                        playerManager.toggleControlsVisibility()
+                                    }
                                 }
                             }
                         }
-                    )
+                    }
                 }
         )
 

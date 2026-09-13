@@ -138,37 +138,7 @@ fun VTMainScreen(
                             )
 
                             NavigationBarItem(
-                                selected = currentTab == MainTab.STREAM,
-                                onClick = { viewModel.setTab(MainTab.STREAM) },
-                                icon = { Icon(Icons.Filled.Podcasts, contentDescription = "Stream") },
-                                label = { Text("Stream", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = colorScheme.onPrimary,
-                                    selectedTextColor = colorScheme.onSurface,
-                                    indicatorColor = colorScheme.primary,
-                                    unselectedIconColor = colorScheme.onSurface.copy(alpha = 0.6f),
-                                    unselectedTextColor = colorScheme.onSurface.copy(alpha = 0.6f)
-                                ),
-                                modifier = Modifier.testTag("nav_stream")
-                            )
-
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.VAULT,
-                                onClick = { viewModel.setTab(MainTab.VAULT) },
-                                icon = { Icon(Icons.Filled.Lock, contentDescription = "Vault") },
-                                label = { Text("Vault", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = colorScheme.onPrimary,
-                                    selectedTextColor = colorScheme.onSurface,
-                                    indicatorColor = colorScheme.primary,
-                                    unselectedIconColor = colorScheme.onSurface.copy(alpha = 0.6f),
-                                    unselectedTextColor = colorScheme.onSurface.copy(alpha = 0.6f)
-                                ),
-                                modifier = Modifier.testTag("nav_vault")
-                            )
-
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.SETTINGS,
+                                selected = currentTab == MainTab.SETTINGS || currentTab == MainTab.STREAM || currentTab == MainTab.VAULT,
                                 onClick = { viewModel.setTab(MainTab.SETTINGS) },
                                 icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings") },
                                 label = { Text("Settings", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
@@ -208,14 +178,18 @@ fun VTMainScreen(
                         )
                         MainTab.STREAM -> StreamTab(
                             viewModel = viewModel,
-                            onPlayVideo = { video, playlist -> viewModel.playVideo(video, playlist) }
+                            onPlayVideo = { video, playlist -> viewModel.playVideo(video, playlist) },
+                            onBack = { viewModel.setTab(MainTab.SETTINGS) }
                         )
                         MainTab.VAULT -> VaultTab(
                             viewModel = viewModel,
-                            onPlayVideo = { video, playlist -> viewModel.playVideo(video, playlist) }
+                            onPlayVideo = { video, playlist -> viewModel.playVideo(video, playlist) },
+                            onBack = { viewModel.setTab(MainTab.SETTINGS) }
                         )
                         MainTab.SETTINGS -> SettingsTab(
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            onOpenStream = { viewModel.setTab(MainTab.STREAM) },
+                            onOpenVault = { viewModel.setTab(MainTab.VAULT) }
                         )
                     }
                 }

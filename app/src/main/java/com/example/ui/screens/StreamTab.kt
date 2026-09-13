@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Podcasts
@@ -27,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -51,8 +54,13 @@ import com.example.ui.viewmodel.VTViewModel
 fun StreamTab(
     viewModel: VTViewModel,
     onPlayVideo: (VideoItem, List<VideoItem>) -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    if (onBack != null) {
+        BackHandler { onBack() }
+    }
+
     var streamUrl by remember { mutableStateOf("") }
     val presets = remember {
         listOf(
@@ -97,18 +105,37 @@ fun StreamTab(
             .background(colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Text(
-            text = "Network & URL Stream",
-            color = colorScheme.onBackground,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 20.sp
-        )
-        Text(
-            text = "Play direct network streams (HLS, DASH, MP4, HTTP/HTTPS)",
-            color = colorScheme.onBackground.copy(alpha = 0.6f),
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back to Settings",
+                        tint = colorScheme.onBackground
+                    )
+                }
+            }
+            Column {
+                Text(
+                    text = "Network & URL Stream",
+                    color = colorScheme.onBackground,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                )
+                Text(
+                    text = "Play direct network streams (HLS, DASH, MP4, HTTP/HTTPS)",
+                    color = colorScheme.onBackground.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

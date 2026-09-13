@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -27,6 +29,8 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -62,6 +66,8 @@ import com.example.ui.viewmodel.VTViewModel
 @Composable
 fun SettingsTab(
     viewModel: VTViewModel,
+    onOpenStream: () -> Unit = {},
+    onOpenVault: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val prefs by viewModel.preferences.collectAsState()
@@ -99,6 +105,26 @@ fun SettingsTab(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
+            // Stream & Private Vault Section (Prominent Access)
+            item {
+                SettingsSectionHeader("Stream & Private Vault", Icons.Filled.Security)
+                SettingsCard {
+                    SettingsFeatureRow(
+                        title = "Network Stream",
+                        subtitle = "Play online HLS (.m3u8), DASH & MP4 video links",
+                        icon = Icons.Filled.Podcasts,
+                        onClick = onOpenStream
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsFeatureRow(
+                        title = "Private Vault",
+                        subtitle = "PIN protected secure video locker & hidden files",
+                        icon = Icons.Filled.Lock,
+                        onClick = onOpenVault
+                    )
+                }
+            }
+
             // Theme & Appearance (Item 10: White & Black high contrast theme)
             item {
                 SettingsSectionHeader("Theme & Appearance", Icons.Filled.BrightnessMedium)
@@ -665,6 +691,64 @@ fun SettingsSwitchRow(
                 uncheckedThumbColor = colorScheme.outline,
                 uncheckedTrackColor = colorScheme.surfaceVariant
             )
+        )
+    }
+}
+
+@Composable
+fun SettingsFeatureRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = colorScheme.onSurface.copy(alpha = 0.45f),
+            modifier = Modifier.size(20.dp)
         )
     }
 }
