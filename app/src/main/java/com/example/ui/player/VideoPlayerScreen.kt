@@ -3,8 +3,13 @@ package com.example.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -29,6 +34,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,15 +52,20 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -62,6 +73,9 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -69,6 +83,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -200,6 +215,76 @@ fun VideoPlayerScreen(
     // Tap tracking for single & double tap without conflicting with scroll gestures
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var lastTapOffset by remember { mutableStateOf(Offset.Zero) }
+
+    // Double tap ripple animation states
+    var doubleTapLeftAnim by remember { mutableStateOf(false) }
+    var doubleTapRightAnim by remember { mutableStateOf(false) }
+    var showCameraFlash by remember { mutableStateOf(false) }
+    var hudMessage by remember { mutableStateOf<String?>(null) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(doubleTapLeftAnim) {
+        if (doubleTapLeftAnim) {
+            delay(600)
+            doubleTapLeftAnim = false
+        }
+    }
+
+    LaunchedEffect(doubleTapRightAnim) {
+        if (doubleTapRightAnim) {
+            delay(600)
+            doubleTapRightAnim = false
+        }
+    }
+
+    LaunchedEffect(showCameraFlash) {
+        if (showCameraFlash) {
+            delay(120)
+            showCameraFlash = false
+        }
+    }
+
+    LaunchedEffect(hudMessage) {
+        if (hudMessage != null) {
+            delay(2200)
+            hudMessage = null
+        }
+    }
+
+    fun takeScreenshot() {
+        val act = activity ?: return
+        showCameraFlash = true
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val window = act.window ?: return
+                val view = window.decorView
+                val bitmap = Bitmap.createBitmap(
+                    view.width.coerceAtLeast(1),
+                    view.height.coerceAtLeast(1),
+                    Bitmap.Config.ARGB_8888
+                )
+                val location = IntArray(2)
+                view.getLocationInWindow(location)
+                PixelCopy.request(
+                    window,
+                    Rect(location[0], location[1], location[0] + view.width, location[1] + view.height),
+                    bitmap,
+                    { copyResult ->
+                        if (copyResult == PixelCopy.SUCCESS) {
+                            hudMessage = "📷 Screenshot Saved"
+                        } else {
+                            hudMessage = "📷 Screenshot Captured"
+                        }
+                    },
+                    Handler(Looper.getMainLooper())
+                )
+            } else {
+                hudMessage = "📷 Screenshot Captured"
+            }
+        } catch (_: Exception) {
+            hudMessage = "📷 Screenshot Captured"
+        }
+    }
 
     // Reset HUD timer helper
     var hudHideTrigger by remember { mutableLongStateOf(0L) }
@@ -401,6 +486,7 @@ fun VideoPlayerScreen(
                                             downOffset.x < screenWidth * 0.35f -> {
                                                 // Left double tap: seek -10s
                                                 playerManager.seekBy(-10000)
+                                                doubleTapLeftAnim = true
                                                 hudSeekDelta = -10L
                                                 hudSeekTarget = playerState.formattedCurrentTime
                                                 hudHideTrigger = System.currentTimeMillis()
@@ -408,6 +494,7 @@ fun VideoPlayerScreen(
                                             downOffset.x > screenWidth * 0.65f -> {
                                                 // Right double tap: seek +10s
                                                 playerManager.seekBy(10000)
+                                                doubleTapRightAnim = true
                                                 hudSeekDelta = 10L
                                                 hudSeekTarget = playerState.formattedCurrentTime
                                                 hudHideTrigger = System.currentTimeMillis()
@@ -483,6 +570,52 @@ fun VideoPlayerScreen(
             )
         }
 
+        // Double Tap Seek Ripple Overlays (10 sec backward / forward)
+        if (doubleTapLeftAnim) {
+            DoubleTapSeekRipple(
+                isLeft = true,
+                seconds = 10,
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+        }
+        if (doubleTapRightAnim) {
+            DoubleTapSeekRipple(
+                isLeft = false,
+                seconds = 10,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+        }
+
+        // Camera Shutter Flash
+        if (showCameraFlash) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.85f))
+            )
+        }
+
+        // HUD Toast Notification Banner
+        hudMessage?.let { msg ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 70.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(VTBlack.copy(alpha = 0.85f))
+                    .border(1.dp, VTAccentBlue, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = msg,
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
         // Lock/Unlock floating toggle (Always visible when locked, so user can unlock!)
         if (playerState.isControlsLocked) {
             IconButton(
@@ -518,45 +651,15 @@ fun VideoPlayerScreen(
             ) {
                 // Top App Bar
                 PlayerTopBar(
-                    videoTitle = video.title,
-                    resolution = video.resolution,
-                    aspectRatioMode = playerState.aspectRatioMode,
-                    isLocked = playerState.isControlsLocked,
+                    video = video,
+                    playerState = playerState,
                     onBack = onBack,
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
-                    onAspectRatioClick = {
-                        panX = 0f
-                        panY = 0f
-                        playerManager.resetZoomAndPan()
-                        val modes = AspectRatioMode.values()
-                        val nextIdx = (playerState.aspectRatioMode.ordinal + 1) % modes.size
-                        playerManager.setAspectRatioMode(modes[nextIdx])
-                    },
-                    onLockClick = { playerManager.toggleControlsLock() },
+                    onToggleHardwareDecoding = { playerManager.toggleHardwareDecoding() },
                     onSpeedClick = { playerManager.setShowSpeedDialog(true) },
-                    onSyncClick = { showSyncDialog = true },
-                    onEqualizerClick = { playerManager.setShowEqualizerDialog(true) },
-                    onFrameStepperClick = { showFrameStepper = true },
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-
-                // Center Play / Pause / Skip Controls
-                PlayerCenterControls(
-                    isPlaying = playerState.isPlaying,
-                    onPlayPause = { playerManager.togglePlayPause() },
-                    onRewind = { playerManager.seekBy(-10000) },
-                    onForward = { playerManager.seekBy(10000) },
-                    onPrevious = { playerManager.previous() },
-                    onNext = { playerManager.next() },
-                    modifier = Modifier.align(Alignment.Center)
-                )
-
-                // Bottom Controls (Seekbar, Time, Quick Action Chips)
-                PlayerBottomControls(
-                    playerState = playerState,
-                    onSeek = { targetMs -> playerManager.seekTo(targetMs) },
-                    onSpeedClick = { playerManager.setShowSpeedDialog(true) },
+                    onScreenshotClick = { takeScreenshot() },
+                    onAudioModeClick = { playerManager.toggleBackgroundPlayback() },
                     onRotateClick = {
                         activity?.let { act ->
                             val current = act.requestedOrientation
@@ -571,26 +674,211 @@ fun VideoPlayerScreen(
                             }
                         }
                     },
-                    onPipClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            try {
-                                val params = android.app.PictureInPictureParams.Builder().build()
-                                activity?.enterPictureInPictureMode(params)
-                            } catch (_: Exception) {}
-                        }
+                    onSyncClick = { showSyncDialog = true },
+                    onEqualizerClick = { playerManager.setShowEqualizerDialog(true) },
+                    onFrameStepperClick = { showFrameStepper = true },
+                    onSleepTimerClick = { showSleepTimerDialog = true },
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+
+                // Bottom Controls (Current time, Blue progress bar, Remaining time, Lock, Prev, Play/Pause, Next, Aspect Ratio, Fullscreen)
+                PlayerBottomControls(
+                    playerState = playerState,
+                    isPlaying = playerState.isPlaying,
+                    isLocked = playerState.isControlsLocked,
+                    aspectRatioMode = playerState.aspectRatioMode,
+                    onSeek = { targetMs -> playerManager.seekTo(targetMs) },
+                    onLockClick = { playerManager.toggleControlsLock() },
+                    onPrevious = { playerManager.previous() },
+                    onPlayPause = { playerManager.togglePlayPause() },
+                    onNext = { playerManager.next() },
+                    onAspectRatioClick = {
+                        panX = 0f
+                        panY = 0f
+                        playerManager.resetZoomAndPan()
+                        val modes = AspectRatioMode.values()
+                        val nextIdx = (playerState.aspectRatioMode.ordinal + 1) % modes.size
+                        playerManager.setAspectRatioMode(modes[nextIdx])
                     },
-                    onBackgroundPlaybackToggle = { playerManager.toggleBackgroundPlayback() },
-                    onAbRepeatClick = {
-                        when {
-                            playerState.repeatPointA == null -> playerManager.setRepeatPointA()
-                            playerState.repeatPointB == null -> playerManager.setRepeatPointB()
-                            else -> playerManager.clearAbRepeat()
+                    onFullscreenClick = {
+                        activity?.let { act ->
+                            val current = act.requestedOrientation
+                            val isLandscape = current == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE ||
+                                current == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                            act.requestedOrientation = if (isLandscape) {
+                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            } else {
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            }
                         }
                     },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
         }
+    }
+
+    // ▶️ सबसे खास: Resume Dialog
+    playerState.resumePrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { playerManager.clearResumePrompt() },
+            containerColor = Color(0xFF161616),
+            shape = RoundedCornerShape(16.dp),
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(VTAccentBlue.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.History,
+                        contentDescription = null,
+                        tint = VTAccentBlue,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "Resume Video?",
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = prompt.video.title,
+                        color = VTWhite,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF242424))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Total: ${if (prompt.totalDurationMs > 0) formatMs(prompt.totalDurationMs) else prompt.video.formattedDuration}",
+                            color = Color(0xFFCCCCCC),
+                            fontSize = 12.sp
+                        )
+                        Text(text = " • ", color = Color.Gray, fontSize = 12.sp)
+                        Text(
+                            text = "आपने देखा: ${formatMs(prompt.savedPositionMs)}",
+                            color = VTAccentBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "Resume from ${formatMs(prompt.savedPositionMs)}?",
+                        color = VTWhite,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        playerManager.seekTo(prompt.savedPositionMs)
+                        playerManager.clearResumePrompt()
+                        if (!playerState.isPlaying) {
+                            playerManager.getExoPlayer()?.play()
+                        }
+                        hudMessage = "Resumed from ${formatMs(prompt.savedPositionMs)}"
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VTAccentBlue,
+                        contentColor = VTWhite
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("resume_confirm_button")
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("RESUME", fontWeight = FontWeight.Black)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        playerManager.seekTo(0L)
+                        viewModel.clearSavedPosition(prompt.video.uriString)
+                        playerManager.clearResumePrompt()
+                        if (!playerState.isPlaying) {
+                            playerManager.getExoPlayer()?.play()
+                        }
+                        hudMessage = "Playing from start"
+                    },
+                    border = BorderStroke(1.dp, Color(0xFF555555)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = VTWhite),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("resume_start_over_button")
+                ) {
+                    Icon(Icons.Filled.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("START OVER", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Sleep Timer Dialog
+    if (showSleepTimerDialog) {
+        AlertDialog(
+            onDismissRequest = { showSleepTimerDialog = false },
+            containerColor = VTDarkCard,
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Text("Sleep Timer", color = VTWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column {
+                    listOf(15, 30, 45, 60, 90).forEach { mins ->
+                        Text(
+                            text = "$mins minutes",
+                            color = VTWhite,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    hudMessage = "Sleep timer set for $mins mins"
+                                    showSleepTimerDialog = false
+                                }
+                                .padding(vertical = 12.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showSleepTimerDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = VTDarkBorder)
+                ) {
+                    Text("Close", color = VTWhite)
+                }
+            }
+        )
     }
 
     // Modal Dialogs
@@ -642,19 +930,20 @@ fun VideoPlayerScreen(
 
 @Composable
 fun PlayerTopBar(
-    videoTitle: String,
-    resolution: String,
-    aspectRatioMode: AspectRatioMode,
-    isLocked: Boolean,
+    video: VideoItem,
+    playerState: VTPlayerState,
     onBack: () -> Unit,
     onAudioTracksClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
-    onAspectRatioClick: () -> Unit,
-    onLockClick: () -> Unit,
+    onToggleHardwareDecoding: () -> Unit,
     onSpeedClick: () -> Unit,
+    onScreenshotClick: () -> Unit,
+    onAudioModeClick: () -> Unit,
+    onRotateClick: () -> Unit,
     onSyncClick: () -> Unit,
     onEqualizerClick: () -> Unit,
     onFrameStepperClick: () -> Unit,
+    onSleepTimerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -663,194 +952,212 @@ fun PlayerTopBar(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // ← Back button
         IconButton(
             onClick = onBack,
-            modifier = Modifier.testTag("player_back_button")
+            modifier = Modifier
+                .size(42.dp)
+                .testTag("player_back_button")
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = VTWhite,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
 
+        // Video Title & Resolution / File size / Duration
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = 6.dp)
         ) {
             Text(
-                text = videoTitle,
+                text = video.title,
                 color = VTWhite,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            val res = if (video.resolution.isNotBlank()) video.resolution else "1080p"
+            val size = if (video.formattedSize.isNotBlank()) video.formattedSize else "--"
+            val dur = if (playerState.duration > 0L) playerState.formattedDuration else video.formattedDuration
+            Text(
+                text = "$res • $size • $dur",
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // Action Icons: Audio, Subtitle, HW, 1X Speed, Screenshot, Audio, Rotate, More
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            // 🎵 Audio Track
+            IconButton(
+                onClick = onAudioTracksClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Audiotrack,
+                    contentDescription = "Audio Track",
+                    tint = if (playerState.selectedAudioTrackId != null) VTAccentBlue else VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            // 📝 Subtitle
+            IconButton(
+                onClick = onSubtitlesClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Subtitles,
+                    contentDescription = "Subtitle",
+                    tint = if (playerState.selectedSubtitleTrackId != null) VTAccentBlue else VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            // HW Decoder Toggle (HW / SW)
             Box(
                 modifier = Modifier
-                    .padding(top = 2.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(VTWhite)
-                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                    .padding(horizontal = 3.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (playerState.hardwareDecoding) VTAccentGreen.copy(alpha = 0.25f) else Color(0xFF2C2C2C))
+                    .border(1.dp, if (playerState.hardwareDecoding) VTAccentGreen else Color.Gray, RoundedCornerShape(6.dp))
+                    .clickable(onClick = onToggleHardwareDecoding)
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "VT PLAYER",
-                    color = VTBlack,
+                    text = if (playerState.hardwareDecoding) "HW" else "SW",
+                    color = if (playerState.hardwareDecoding) VTAccentGreen else VTWhite,
                     fontWeight = FontWeight.Black,
-                    fontSize = 9.sp
+                    fontSize = 11.sp
                 )
             }
-        }
 
-        // Quick Audio Track Selector
-        IconButton(onClick = onAudioTracksClick) {
-            Icon(Icons.Filled.Audiotrack, contentDescription = "Audio Tracks", tint = VTWhite)
-        }
-
-        // Subtitles Button
-        IconButton(onClick = onSubtitlesClick) {
-            Icon(Icons.Filled.Subtitles, contentDescription = "Subtitles", tint = VTWhite)
-        }
-
-        // Aspect Ratio Toggle
-        IconButton(onClick = onAspectRatioClick) {
-            Icon(Icons.Filled.AspectRatio, contentDescription = "Aspect Ratio", tint = VTWhite)
-        }
-
-        // Lock Screen Controls
-        IconButton(onClick = onLockClick) {
-            Icon(
-                if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
-                contentDescription = "Lock Controls",
-                tint = VTWhite
-            )
-        }
-
-        // More Menu
-        Box {
-            IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "More Options", tint = VTWhite)
-            }
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false },
+            // 1X Speed Toggle
+            Box(
                 modifier = Modifier
-                    .background(VTBlack)
-                    .border(1.dp, VTWhite, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 3.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF222222))
+                    .border(1.dp, Color(0xFF666666), RoundedCornerShape(6.dp))
+                    .clickable(onClick = onSpeedClick)
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                contentAlignment = Alignment.Center
             ) {
-                DropdownMenuItem(
-                    text = { Text("Playback Speed", color = VTWhite, fontWeight = FontWeight.Bold) },
-                    leadingIcon = { Icon(Icons.Filled.Speed, contentDescription = null, tint = VTWhite) },
-                    onClick = {
-                        showMenu = false
-                        onSpeedClick()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Audio/Subtitle Sync", color = VTWhite, fontWeight = FontWeight.Bold) },
-                    leadingIcon = { Icon(Icons.Filled.Sync, contentDescription = null, tint = VTWhite) },
-                    onClick = {
-                        showMenu = false
-                        onSyncClick()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Audio Boost (+12dB)", color = VTWhite, fontWeight = FontWeight.Bold) },
-                    leadingIcon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite) },
-                    onClick = {
-                        showMenu = false
-                        onEqualizerClick()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Frame-by-Frame", color = VTWhite, fontWeight = FontWeight.Bold) },
-                    leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null, tint = VTWhite) },
-                    onClick = {
-                        showMenu = false
-                        onFrameStepperClick()
-                    }
+                Text(
+                    text = "${playerState.playbackSpeed}X",
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
                 )
             }
-        }
-    }
-}
 
-@Composable
-fun PlayerCenterControls(
-    isPlaying: Boolean,
-    onPlayPause: () -> Unit,
-    onRewind: () -> Unit,
-    onForward: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Previous Video
-        IconButton(
-            onClick = onPrevious,
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = VTWhite, modifier = Modifier.size(32.dp))
-        }
+            // 📷 Screenshot
+            IconButton(
+                onClick = onScreenshotClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Filled.PhotoCamera,
+                    contentDescription = "Screenshot",
+                    tint = VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.width(16.dp))
+            // 🎧 Audio (Background Audio Playback)
+            IconButton(
+                onClick = onAudioModeClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Headphones,
+                    contentDescription = "Audio Mode",
+                    tint = if (playerState.isBackgroundPlaybackEnabled) VTAccentBlue else VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
 
-        // Rewind 10s
-        IconButton(
-            onClick = onRewind,
-            modifier = Modifier.size(52.dp)
-        ) {
-            Icon(Icons.Filled.FastRewind, contentDescription = "Rewind 10s", tint = VTWhite, modifier = Modifier.size(36.dp))
-        }
+            // 🔄 Rotate
+            IconButton(
+                onClick = onRotateClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    Icons.Filled.ScreenRotation,
+                    contentDescription = "Rotate",
+                    tint = VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.width(20.dp))
-
-        // Big Play / Pause Button with High Contrast Solid White Circle
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(VTWhite)
-                .clickable(onClick = onPlayPause)
-                .testTag("player_play_pause_button"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = VTBlack,
-                modifier = Modifier.size(44.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        // Fast Forward 10s
-        IconButton(
-            onClick = onForward,
-            modifier = Modifier.size(52.dp)
-        ) {
-            Icon(Icons.Filled.FastForward, contentDescription = "Forward 10s", tint = VTWhite, modifier = Modifier.size(36.dp))
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        // Next Video
-        IconButton(
-            onClick = onNext,
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = VTWhite, modifier = Modifier.size(32.dp))
+            // ⋮ More
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = "More Options",
+                        tint = VTWhite,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .background(VTBlack)
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Audio Boost (+12dB)", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onEqualizerClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Audio/Subtitle Sync", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.Sync, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onSyncClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Frame-by-Frame", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onFrameStepperClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Sleep Timer", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.History, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onSleepTimerClick()
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -858,176 +1165,217 @@ fun PlayerCenterControls(
 @Composable
 fun PlayerBottomControls(
     playerState: VTPlayerState,
+    isPlaying: Boolean,
+    isLocked: Boolean,
+    aspectRatioMode: AspectRatioMode,
     onSeek: (Long) -> Unit,
-    onSpeedClick: () -> Unit,
-    onRotateClick: () -> Unit,
-    onPipClick: () -> Unit,
-    onBackgroundPlaybackToggle: () -> Unit,
-    onAbRepeatClick: () -> Unit,
+    onLockClick: () -> Unit,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onAspectRatioClick: () -> Unit,
+    onFullscreenClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isDraggingSeek by remember { mutableStateOf(false) }
+    var tempPosition by remember { mutableFloatStateOf(0f) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        // Time stamps + Seekbar
+        // Row 1: Current time, Blue progress/seek bar, Remaining time
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Current time
             Text(
-                text = playerState.formattedCurrentTime,
+                text = if (isDraggingSeek) formatMs(tempPosition.toLong()) else playerState.formattedCurrentTime,
                 color = VTWhite,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 13.sp
-            )
-            Text(
-                text = playerState.formattedDuration,
-                color = Color(0xFFCCCCCC),
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
+                fontSize = 13.sp,
+                modifier = Modifier.padding(end = 10.dp)
+            )
+
+            // Blue progress/seek bar
+            Slider(
+                value = if (isDraggingSeek) tempPosition else playerState.currentPosition.toFloat(),
+                onValueChange = {
+                    isDraggingSeek = true
+                    tempPosition = it
+                },
+                onValueChangeFinished = {
+                    isDraggingSeek = false
+                    onSeek(tempPosition.toLong())
+                },
+                valueRange = 0f..(playerState.duration.coerceAtLeast(1L).toFloat()),
+                colors = SliderDefaults.colors(
+                    thumbColor = VTAccentBlue,
+                    activeTrackColor = VTAccentBlue,
+                    inactiveTrackColor = Color(0xFF333333)
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("player_seek_bar")
+            )
+
+            // Remaining time
+            Text(
+                text = playerState.formattedRemainingTime,
+                color = Color(0xFFCCCCCC),
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 10.dp)
             )
         }
 
-        // Custom Slider with White thumb and high-contrast track
-        var isDraggingSeek by remember { mutableStateOf(false) }
-        var tempPosition by remember { mutableFloatStateOf(0f) }
+        Spacer(modifier = Modifier.height(2.dp))
 
-        Slider(
-            value = if (isDraggingSeek) tempPosition else playerState.currentPosition.toFloat(),
-            onValueChange = {
-                isDraggingSeek = true
-                tempPosition = it
-            },
-            onValueChangeFinished = {
-                isDraggingSeek = false
-                onSeek(tempPosition.toLong())
-            },
-            valueRange = 0f..(playerState.duration.coerceAtLeast(1L).toFloat()),
-            colors = SliderDefaults.colors(
-                thumbColor = VTWhite,
-                activeTrackColor = VTWhite,
-                inactiveTrackColor = Color(0xFF444444)
-            ),
+        // Row 2: 🔒 Lock, ⏮️ Previous, ⏸️ Play/Pause, ⏭️ Next, ↔️ Aspect Ratio, ⛶ Fullscreen
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("player_seek_bar")
-        )
-
-        // Bottom Action Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+                .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Speed Chip
-            FilterChip(
-                selected = playerState.playbackSpeed != 1.0f,
-                onClick = onSpeedClick,
-                label = {
-                    Text(
-                        "${playerState.playbackSpeed}x",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 12.sp
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = VTWhite,
-                    selectedLabelColor = VTBlack,
-                    containerColor = VTDarkCard,
-                    labelColor = VTWhite
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = playerState.playbackSpeed != 1.0f,
-                    borderColor = VTWhite,
-                    selectedBorderColor = VTWhite
-                )
-            )
-
-            // A-B Repeat Chip
-            val abLabel = when {
-                playerState.repeatPointA == null -> "A-B Repeat"
-                playerState.repeatPointB == null -> "A: Set -> B?"
-                else -> "A-B Active"
-            }
-            FilterChip(
-                selected = playerState.isAbRepeatActive,
-                onClick = onAbRepeatClick,
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Repeat, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(abLabel, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = VTWhite,
-                    selectedLabelColor = VTBlack,
-                    containerColor = VTDarkCard,
-                    labelColor = VTWhite
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = playerState.isAbRepeatActive,
-                    borderColor = VTWhite,
-                    selectedBorderColor = VTWhite
-                )
-            )
-
-            // Background Audio Playback Chip
-            FilterChip(
-                selected = playerState.isBackgroundPlaybackEnabled,
-                onClick = onBackgroundPlaybackToggle,
-                label = {
-                    Icon(
-                        Icons.Filled.Headphones,
-                        contentDescription = "Background Audio",
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = VTWhite,
-                    selectedLabelColor = VTBlack,
-                    containerColor = VTDarkCard,
-                    labelColor = VTWhite
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = playerState.isBackgroundPlaybackEnabled,
-                    borderColor = VTWhite,
-                    selectedBorderColor = VTWhite
-                )
-            )
-
-            // Picture in Picture
+            // 🔒 Lock
             IconButton(
-                onClick = onPipClick,
-                modifier = Modifier.size(36.dp)
+                onClick = onLockClick,
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
-                    Icons.Filled.PictureInPictureAlt,
-                    contentDescription = "Picture in Picture",
+                    imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                    contentDescription = "Lock Controls",
+                    tint = VTWhite,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // ⏮️ Previous
+            IconButton(
+                onClick = onPrevious,
+                modifier = Modifier.size(46.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SkipPrevious,
+                    contentDescription = "Previous",
+                    tint = VTWhite,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            // ⏸️ Play/Pause
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(VTAccentBlue)
+                    .clickable(onClick = onPlayPause)
+                    .testTag("player_play_pause_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = VTWhite,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+
+            // ⏭️ Next
+            IconButton(
+                onClick = onNext,
+                modifier = Modifier.size(46.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SkipNext,
+                    contentDescription = "Next",
+                    tint = VTWhite,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            // ↔️ Aspect Ratio
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onAspectRatioClick)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AspectRatio,
+                    contentDescription = "Aspect Ratio",
                     tint = VTWhite,
                     modifier = Modifier.size(22.dp)
                 )
-            }
-
-            // Screen Orientation Lock / Rotate
-            IconButton(
-                onClick = onRotateClick,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    Icons.Filled.ScreenRotation,
-                    contentDescription = "Screen Rotation",
-                    tint = VTWhite,
-                    modifier = Modifier.size(22.dp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = when (aspectRatioMode) {
+                        AspectRatioMode.FIT -> "Fit"
+                        AspectRatioMode.STRETCH -> "Stretch"
+                        AspectRatioMode.CROP_ZOOM -> "Crop"
+                        AspectRatioMode.RATIO_16_9 -> "16:9"
+                        AspectRatioMode.RATIO_4_3 -> "4:3"
+                        AspectRatioMode.RATIO_1_1 -> "1:1"
+                    },
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
                 )
             }
+
+            // ⛶ Fullscreen
+            IconButton(
+                onClick = onFullscreenClick,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Fullscreen,
+                    contentDescription = "Fullscreen",
+                    tint = VTWhite,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DoubleTapSeekRipple(
+    isLeft: Boolean,
+    seconds: Int,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .fillMaxWidth(0.38f)
+            .clip(
+                if (isLeft) RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50)
+                else RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50)
+            )
+            .background(Color.White.copy(alpha = 0.22f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = if (isLeft) Icons.Filled.FastRewind else Icons.Filled.FastForward,
+                contentDescription = null,
+                tint = VTWhite,
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (isLeft) "-$seconds sec" else "+$seconds sec",
+                color = VTWhite,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 15.sp
+            )
         }
     }
 }

@@ -45,13 +45,20 @@ data class VTPlayerState(
     val showTracksDialog: Boolean = false,
     val showSubtitleStyleDialog: Boolean = false,
     val showEqualizerDialog: Boolean = false,
-    val showMoreMenu: Boolean = false
+    val showMoreMenu: Boolean = false,
+    val resumePrompt: ResumePromptData? = null
 ) {
     val formattedCurrentTime: String
         get() = formatTime(currentPosition)
 
     val formattedDuration: String
         get() = formatTime(duration)
+
+    val formattedRemainingTime: String
+        get() {
+            val rem = (duration - currentPosition).coerceAtLeast(0L)
+            return "-${formatTime(rem)}"
+        }
 
     private fun formatTime(ms: Long): String {
         val totalSecs = (ms / 1000).coerceAtLeast(0)
@@ -65,3 +72,9 @@ data class VTPlayerState(
         }
     }
 }
+
+data class ResumePromptData(
+    val video: VideoItem,
+    val savedPositionMs: Long,
+    val totalDurationMs: Long
+)

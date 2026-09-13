@@ -41,6 +41,8 @@ class VTPlayerManager(
     private val _playerState = MutableStateFlow(VTPlayerState())
     val playerState: StateFlow<VTPlayerState> = _playerState.asStateFlow()
 
+    var onPositionSaved: ((uri: String, position: Long, duration: Long) -> Unit)? = null
+
     private var progressJob: Job? = null
 
     private val playerListener = object : Player.Listener {
@@ -186,6 +188,7 @@ class VTPlayerManager(
     private fun startProgressTracking() {
         progressJob?.cancel()
         progressJob = coroutineScope.launch(Dispatchers.Main) {
+            var saveCounter = 0
             while (isActive) {
                 exoPlayer?.let { player ->
                     val pos = player.currentPosition.coerceAtLeast(0L)
@@ -204,6 +207,21 @@ class VTPlayerManager(
                             currentPosition = pos,
                             duration = if (dur != C.TIME_UNSET && dur > 0) dur else it.duration
                         )
+                    }
+
+                    // Periodically record position (~every 1.5 seconds)
+                    saveCounter++
+                    if (saveCounter >= 5) {
+                        saveCounter = 0
+                        state.currentVideo?.let { vid ->
+                            if (pos > 1000L) {
+                                onPositionSaved?.invoke(
+                                    vid.uriString,
+                                    pos,
+                                    if (dur != C.TIME_UNSET && dur > 0) dur else vid.duration
+                                )
+                            }
+                        }
                     }
                 }
                 delay(300)
@@ -543,6 +561,29 @@ class VTPlayerManager(
     fun setShowSubtitleStyleDialog(show: Boolean) = _playerState.update { it.copy(showSubtitleStyleDialog = show) }
     fun setShowEqualizerDialog(show: Boolean) = _playerState.update { it.copy(showEqualizerDialog = show) }
     fun setShowMoreMenu(show: Boolean) = _playerState.update { it.copy(showMoreMenu = show) }
+
+    fun setResumePrompt(data: ResumePromptData?) {
+        _playerState.update { it.copy(resumePrompt = data) }
+    }
+
+    fun clearResumePrompt() {
+        _playerState.update { it.copy(resumePrompt = null) }
+    }
+
+    fun toggleHardwareDecoding() {
+        val currentPos = exoPlayer?.currentPosition ?: _playerState.value.currentPosition
+        val currentVid = _playerState.value.currentVideo ?: return
+        val currentPlaylist = _playerState.value.playlist
+        val currentIndex = _playerState.value.currentIndex
+        val newMode = !_playerState.value.hardwareDecoding
+        initPlayer(useHardware = newMode)
+        playVideo(
+            video = currentVid,
+            playlist = currentPlaylist,
+            startIndex = currentIndex,
+            resumePosition = currentPos
+        )
+    }
 
     fun release() {
         progressJob?.cancel()

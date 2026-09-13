@@ -21,10 +21,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +51,7 @@ import com.example.ui.viewmodel.VTViewModel
 fun FolderListTab(
     viewModel: VTViewModel,
     onFolderSelected: (String) -> Unit,
+    onOpenDrawer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val folders by viewModel.folderItems.collectAsState()
@@ -56,34 +63,150 @@ fun FolderListTab(
             .background(colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Text(
-            text = "Video Folders",
-            color = colorScheme.onBackground,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 20.sp
-        )
-        Text(
-            text = "${folders.size} folders found on storage",
-            color = colorScheme.onBackground.copy(alpha = 0.6f),
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp
-        )
+        // Top Header Row with Three-line menu button (≡)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                        .testTag("folder_menu_three_lines_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = "Menu & Featured Streams",
+                        tint = colorScheme.onBackground
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Video Folders",
+                        color = colorScheme.onBackground,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp
+                    )
+                    Text(
+                        text = "${folders.size} folders found on storage",
+                        color = colorScheme.onBackground.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Quick Auto-Scan Button
+            IconButton(
+                onClick = { viewModel.refreshVideos() },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                    .size(40.dp)
+                    .testTag("folders_scan_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Auto-Scan Device Storage",
+                    tint = colorScheme.onBackground
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 80.dp)
-        ) {
-            items(folders, key = { it.name }) { folder ->
-                FolderCard(
-                    folder = folder,
-                    onClick = {
-                        viewModel.setSelectedFolder(folder.name)
-                        viewModel.setTab(MainTab.VIDEOS)
+        if (folders.isEmpty()) {
+            // Empty State
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 80.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Folder,
+                            contentDescription = null,
+                            tint = colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        )
                     }
-                )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "No Video Folders Found",
+                        color = colorScheme.onBackground,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Device storage videos are automatically indexed into their parent folders.",
+                        color = colorScheme.onBackground.copy(alpha = 0.6f),
+                        fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Button(
+                        onClick = { viewModel.refreshVideos() },
+                        colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Auto-Scan Storage", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = onOpenDrawer,
+                        colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Filled.Star, contentDescription = null, tint = colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Watch Featured Streams (≡)", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                items(folders, key = { it.name }) { folder ->
+                    FolderCard(
+                        folder = folder,
+                        onClick = {
+                            viewModel.setSelectedFolder(folder.name)
+                            viewModel.setTab(MainTab.VIDEOS)
+                        }
+                    )
+                }
             }
         }
     }

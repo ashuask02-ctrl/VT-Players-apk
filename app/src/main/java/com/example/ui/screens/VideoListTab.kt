@@ -30,10 +30,13 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -74,6 +77,7 @@ import com.example.ui.viewmodel.VTViewModel
 fun VideoListTab(
     viewModel: VTViewModel,
     onPlayVideo: (VideoItem, List<VideoItem>) -> Unit,
+    onOpenDrawer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val videos by viewModel.filteredVideos.collectAsState()
@@ -116,6 +120,24 @@ fun VideoListTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Three-line (≡) Hamburger Menu button at top!
+                    IconButton(
+                        onClick = onOpenDrawer,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                            .testTag("menu_three_lines_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Menu,
+                            contentDescription = "Menu & Featured Streams",
+                            tint = colorScheme.onBackground
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -129,7 +151,7 @@ fun VideoListTab(
                             fontSize = 18.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "VT PLAYER",
                         color = colorScheme.onBackground,
@@ -139,20 +161,40 @@ fun VideoListTab(
                     )
                 }
 
-                // Sort Button
-                IconButton(
-                    onClick = { showSortDialog = true },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
-                        .size(40.dp)
-                        .testTag("sort_button")
-                ) {
-                    Icon(
-                        Icons.Filled.Sort,
-                        contentDescription = "Sort",
-                        tint = colorScheme.onBackground
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Quick Auto-Scan Device Storage Button
+                    IconButton(
+                        onClick = { viewModel.refreshVideos() },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                            .size(40.dp)
+                            .testTag("auto_scan_device_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Auto-Scan Device Storage",
+                            tint = colorScheme.onBackground
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Sort Button
+                    IconButton(
+                        onClick = { showSortDialog = true },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                            .size(40.dp)
+                            .testTag("sort_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Sort,
+                            contentDescription = "Sort",
+                            tint = colorScheme.onBackground
+                        )
+                    }
                 }
             }
 
@@ -225,47 +267,82 @@ fun VideoListTab(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
-            // Storage permission grant banner
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colorScheme.surfaceVariant)
-                        .border(1.dp, colorScheme.outline, RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Auto-Scan Device Videos",
-                            color = colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "Tap Scan to index all device storage videos",
-                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            fontSize = 12.sp
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                Manifest.permission.READ_MEDIA_VIDEO
-                            } else {
-                                Manifest.permission.READ_EXTERNAL_STORAGE
-                            }
-                            permissionLauncher.launch(perm)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorScheme.primary,
-                            contentColor = colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+            // Empty State when no videos found
+            if (videos.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("Scan", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.VideoLibrary,
+                                    contentDescription = null,
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(38.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "No Local Videos Found",
+                                color = colorScheme.onBackground,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "Videos stored in your device storage and folders will automatically show here.",
+                                color = colorScheme.onBackground.copy(alpha = 0.6f),
+                                fontSize = 13.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(18.dp))
+
+                            Button(
+                                onClick = {
+                                    val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        Manifest.permission.READ_MEDIA_VIDEO
+                                    } else {
+                                        Manifest.permission.READ_EXTERNAL_STORAGE
+                                    }
+                                    permissionLauncher.launch(perm)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Filled.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Auto-Scan Storage", fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Button(
+                                onClick = onOpenDrawer,
+                                colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Filled.Star, contentDescription = null, tint = colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Watch Featured Streams (≡)", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

@@ -105,6 +105,12 @@ class VTRepository(
         }
     }
 
+    suspend fun getRecordByUri(uri: String): PlaybackRecordEntity? {
+        return withContext(Dispatchers.IO) {
+            recordDao.getRecordByUri(uri)
+        }
+    }
+
     suspend fun toggleFavorite(uri: String, title: String, isFav: Boolean) {
         withContext(Dispatchers.IO) {
             val existing = recordDao.getRecordByUri(uri)
@@ -214,7 +220,15 @@ class VTRepository(
                     val size = if (sizeCol >= 0) cursor.getLong(sizeCol) else 0L
                     val dateModified = if (dateCol >= 0) cursor.getLong(dateCol) * 1000L else System.currentTimeMillis()
                     val rawPath = if (pathCol >= 0) cursor.getString(pathCol) ?: "Internal" else "Internal"
-                    val folderName = rawPath.trim('/').split('/').lastOrNull()?.ifBlank { "Videos" } ?: "Videos"
+                    val folderName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        rawPath.trim('/').split('/').lastOrNull()?.ifBlank { "Videos" } ?: "Videos"
+                    } else {
+                        try {
+                            java.io.File(rawPath).parentFile?.name ?: "Videos"
+                        } catch (_: Exception) {
+                            "Videos"
+                        }
+                    }
 
                     list.add(
                         VideoItem(
@@ -233,22 +247,8 @@ class VTRepository(
             // Permission not granted or query failure
         }
 
-        // Always include curated high-contrast demo videos so the player is fully usable immediately
-        sampleStreams.forEachIndexed { index, preset ->
-            list.add(
-                VideoItem(
-                    id = -(index + 100L),
-                    title = preset.title,
-                    uriString = preset.url,
-                    duration = 596000L,
-                    size = 45000000L,
-                    folderName = "Featured Streams",
-                    resolution = "1080p FHD",
-                    dateModified = System.currentTimeMillis() - (index * 86400000L)
-                )
-            )
-        }
-
+        // Only actual scanned device videos are returned here.
+        // Featured Streams are kept separate and displayed in the top Three-line (≡) menu.
         emit(list)
     }.flowOn(Dispatchers.IO)
 }

@@ -13,6 +13,7 @@ import com.example.data.PlaylistEntity
 import com.example.data.VTRepository
 import com.example.model.FolderItem
 import com.example.model.SortOrder
+import com.example.model.StreamPreset
 import com.example.model.VideoItem
 import com.example.player.VTPlayerManager
 import kotlinx.coroutines.Dispatchers
@@ -166,6 +167,22 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     init {
         refreshVideos()
         checkVaultPinStatus()
+
+        // Auto-save playback position to database periodically during playback
+        playerManager.onPositionSaved = { uri, pos, dur ->
+            val vid = _activePlayingVideo.value
+            if (vid != null && vid.uriString == uri) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    repository.recordPlayback(
+                        uri = uri,
+                        title = vid.title,
+                        duration = dur,
+                        position = pos,
+                        folderName = vid.folderName
+                    )
+                }
+            }
+        }
     }
 
     fun refreshVideos() {
@@ -174,6 +191,24 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
                 _scannedVideos.value = scanned
             }
         }
+    }
+
+    // Featured streams for the top Three-line (≡) menu
+    val featuredStreams: List<StreamPreset>
+        get() = repository.sampleStreams
+
+    fun playFeaturedStream(preset: StreamPreset) {
+        val video = VideoItem(
+            id = preset.url.hashCode().toLong(),
+            title = preset.title,
+            uriString = preset.url,
+            duration = 596000L,
+            size = 45000000L,
+            folderName = "Featured Streams",
+            resolution = preset.tag,
+            dateModified = System.currentTimeMillis()
+        )
+        playVideo(video, listOf(video))
     }
 
     private fun checkVaultPinStatus() {
@@ -204,18 +239,50 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         _activePlayingVideo.value = video
         viewModelScope.launch {
             val prefs = repository.getPreferences()
-            val resumePos = if (prefs.resumePlayback) video.lastPosition else 0L
+            val record = repository.getRecordByUri(video.uriString)
+            val savedPos = record?.lastPosition ?: video.lastPosition
+            val totalDur = if ((record?.duration ?: 0L) > 0) record!!.duration else video.duration
             val startIdx = playlist.indexOfFirst { it.uriString == video.uriString }.coerceAtLeast(0)
+
+            // Has user previously watched more than 3 seconds, and not already at the end?
+            val hasResumePoint = savedPos > 3000L && (totalDur <= 0L || savedPos < (totalDur - 5000L))
 
             playerManager.playVideo(
                 video = video,
                 playlist = if (playlist.isEmpty()) listOf(video) else playlist,
                 startIndex = startIdx,
-                resumePosition = resumePos,
+                resumePosition = if (hasResumePoint) savedPos else 0L,
                 externalSubtitleUri = externalSubUri
             )
 
             playerManager.setPlaybackSpeed(prefs.defaultSpeed)
+
+            if (hasResumePoint) {
+                playerManager.setResumePrompt(
+                    com.example.player.ResumePromptData(
+                        video = video,
+                        savedPositionMs = savedPos,
+                        totalDurationMs = totalDur
+                    )
+                )
+            } else {
+                playerManager.clearResumePrompt()
+            }
+        }
+    }
+
+    fun clearSavedPosition(uri: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = repository.getRecordByUri(uri)
+            if (existing != null) {
+                repository.recordPlayback(
+                    uri = uri,
+                    title = existing.title,
+                    duration = existing.duration,
+                    position = 0L,
+                    folderName = existing.folderName
+                )
+            }
         }
     }
 
