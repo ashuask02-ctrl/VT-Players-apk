@@ -72,7 +72,7 @@ jobs:
             ### VT Player Debug Build
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
-            - Download `vtplayer-debug.apk` directly to your phone.
+            - Download [vtplayer-debug.apk](https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/vtplayer-debug.apk) directly to your phone.
           draft: false
           prerelease: false
           files: vtplayer-debug.apk

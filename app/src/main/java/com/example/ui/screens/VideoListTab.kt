@@ -81,7 +81,6 @@ fun VideoListTab(
     modifier: Modifier = Modifier
 ) {
     val videos by viewModel.filteredVideos.collectAsState()
-    val recentRecords by viewModel.recentRecords.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val selectedFolder by viewModel.selectedFolder.collectAsState()
@@ -91,6 +90,7 @@ fun VideoListTab(
     var videoToAddToPlaylist by remember { mutableStateOf<VideoItem?>(null) }
     var newPlaylistName by remember { mutableStateOf("") }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var isSearchActive by remember { mutableStateOf(false) }
 
     val colorScheme = MaterialTheme.colorScheme
 
@@ -108,127 +108,169 @@ fun VideoListTab(
             .fillMaxSize()
             .background(colorScheme.background)
     ) {
-        // Top Branding & Search Row
+        // Top Bar: Search Symbol & Action Icons / Search Input when active
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Three-line (≡) Hamburger Menu button at top!
-                    IconButton(
-                        onClick = onOpenDrawer,
+            if (isSearchActive) {
+                // Expanded Search Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { viewModel.setSearchQuery(it) },
+                        placeholder = {
+                            Text(
+                                "Search all videos...",
+                                color = colorScheme.onBackground.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = "Search Symbol",
+                                tint = colorScheme.primary
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        viewModel.setSearchQuery("")
+                                    } else {
+                                        isSearchActive = false
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Close Search",
+                                    tint = colorScheme.onBackground
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colorScheme.primary,
+                            unfocusedBorderColor = colorScheme.outline,
+                            focusedTextColor = colorScheme.onBackground,
+                            unfocusedTextColor = colorScheme.onBackground
+                        ),
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
-                            .testTag("menu_three_lines_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Menu,
-                            contentDescription = "Menu & Featured Streams",
-                            tint = colorScheme.onBackground
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colorScheme.primary)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "VT",
-                            color = colorScheme.onPrimary,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 18.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "VT PLAYER",
-                        color = colorScheme.onBackground,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 20.sp,
-                        letterSpacing = 1.sp
+                            .fillMaxWidth()
+                            .testTag("search_text_field")
                     )
                 }
+            } else {
+                // Top Branding Row with Search Symbol Icon
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Three-line (≡) Hamburger Menu button at top
+                        IconButton(
+                            onClick = onOpenDrawer,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                                .testTag("menu_three_lines_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Menu,
+                                contentDescription = "Menu & Featured Streams",
+                                tint = colorScheme.onBackground
+                            )
+                        }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Quick Auto-Scan Device Storage Button
-                    IconButton(
-                        onClick = { viewModel.refreshVideos() },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
-                            .size(40.dp)
-                            .testTag("auto_scan_device_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Auto-Scan Device Storage",
-                            tint = colorScheme.onBackground
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colorScheme.primary)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "VT",
+                                color = colorScheme.onPrimary,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "VT PLAYER",
+                            color = colorScheme.onBackground,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp,
+                            letterSpacing = 1.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Search Symbol (🔍)
+                        IconButton(
+                            onClick = { isSearchActive = true },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                                .size(40.dp)
+                                .testTag("search_symbol_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = "Search Symbol",
+                                tint = colorScheme.onBackground
+                            )
+                        }
 
-                    // Sort Button
-                    IconButton(
-                        onClick = { showSortDialog = true },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
-                            .size(40.dp)
-                            .testTag("sort_button")
-                    ) {
-                        Icon(
-                            Icons.Filled.Sort,
-                            contentDescription = "Sort",
-                            tint = colorScheme.onBackground
-                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Quick Auto-Scan Device Storage Button
+                        IconButton(
+                            onClick = { viewModel.refreshVideos() },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                                .size(40.dp)
+                                .testTag("auto_scan_device_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "Auto-Scan Device Storage",
+                                tint = colorScheme.onBackground
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Sort Button
+                        IconButton(
+                            onClick = { showSortDialog = true },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.5.dp, colorScheme.outline, RoundedCornerShape(8.dp))
+                                .size(40.dp)
+                                .testTag("sort_button")
+                        ) {
+                            Icon(
+                                Icons.Filled.Sort,
+                                contentDescription = "Sort",
+                                tint = colorScheme.onBackground
+                            )
+                        }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = {
-                    Text("Search videos by title...", color = colorScheme.onBackground.copy(alpha = 0.5f), fontWeight = FontWeight.Medium)
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = "Search", tint = colorScheme.onBackground)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear", tint = colorScheme.onBackground)
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colorScheme.primary,
-                    unfocusedBorderColor = colorScheme.outline,
-                    focusedTextColor = colorScheme.onBackground,
-                    unfocusedTextColor = colorScheme.onBackground
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("search_text_field")
-            )
 
             // Active Folder Filter Indicator
             if (selectedFolder != null) {
@@ -347,45 +389,7 @@ fun VideoListTab(
                 }
             }
 
-            // Recently Played Carousel (if any records exist)
-            if (recentRecords.isNotEmpty() && searchQuery.isEmpty() && selectedFolder == null) {
-                item {
-                    Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.History, contentDescription = null, tint = colorScheme.onBackground, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Recently Played",
-                                color = colorScheme.onBackground,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 16.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(recentRecords.take(5)) { record ->
-                                val matchedVideo = videos.firstOrNull { it.uriString == record.uri }
-                                    ?: VideoItem(
-                                        id = record.id,
-                                        title = record.title,
-                                        uriString = record.uri,
-                                        duration = record.duration,
-                                        lastPosition = record.lastPosition,
-                                        folderName = record.folderName
-                                    )
-                                RecentVideoChip(
-                                    record = record,
-                                    onClick = { onPlayVideo(matchedVideo, listOf(matchedVideo)) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Videos Count Header
+            // All Videos Count Header
             item {
                 Row(
                     modifier = Modifier
@@ -584,59 +588,3 @@ fun VideoListTab(
     }
 }
 
-@Composable
-fun RecentVideoChip(
-    record: com.example.data.PlaybackRecordEntity,
-    onClick: () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .width(180.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colorScheme.surface)
-            .border(1.5.dp, colorScheme.outline, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(10.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = record.title,
-                    color = colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            val progress = if (record.duration > 0) {
-                (record.lastPosition.toFloat() / record.duration.toFloat()).coerceIn(0f, 1f)
-            } else 0f
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp),
-                color = colorScheme.primary,
-                trackColor = colorScheme.outlineVariant
-            )
-        }
-    }
-}
