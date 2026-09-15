@@ -660,7 +660,7 @@ class VTPlayerManager(
 
     fun setVolumeWithBoost(percent: Int) {
         val isHwPlus = _playerState.value.decoderMode == DecoderMode.HW_PLUS
-        val maxAllowed = if (isHwPlus) 200 else 100
+        val maxAllowed = if (isHwPlus) 120 else 100
         val clampedPercent = percent.coerceIn(0, maxAllowed)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
@@ -685,13 +685,13 @@ class VTPlayerManager(
                 )
             }
         } else {
-            // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
+            // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
             try {
                 audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
             } catch (_: Exception) {}
 
-            val boostFraction = (clampedPercent - 100) / 100f // 0.01f .. 1.0f
-            val gainMb = (boostFraction * 2000).toInt() // up to +2000 mB (+20 dB amplification)
+            val boostFraction = (clampedPercent - 100) / 20f // 0.05f .. 1.0f
+            val gainMb = (boostFraction * 2000).toInt().coerceIn(0, 2000) // up to +2000 mB (+20 dB amplification)
 
             val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
             if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
@@ -741,9 +741,9 @@ class VTPlayerManager(
         val currentSpeed = _playerState.value.playbackSpeed
         
         // SW and HW volume fixed to 0% – 100% (Standard device music volume).
-        // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.
+        // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.
         val currentVolume = if (newMode == DecoderMode.HW_PLUS) {
-            _playerState.value.volumePercent
+            _playerState.value.volumePercent.coerceIn(0, 120)
         } else {
             _playerState.value.volumePercent.coerceIn(0, 100)
         }

@@ -444,11 +444,11 @@ fun VideoPlayerScreen(
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
                                             // SW and HW volume fixed to 0% – 100% (Standard device music volume).
-                                            // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by Loudness Enhancer, providing up to +20 dB amplification.
+                                            // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by Loudness Enhancer, providing up to +20 dB amplification.
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
-                                            val maxAllowed = if (isHwPlus) 200 else 100
-                                            val scaleFactor = if (isHwPlus) 150 else 100
+                                            val maxAllowed = if (isHwPlus) 120 else 100
+                                            val scaleFactor = if (isHwPlus) 110 else 100
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
                                             val targetPercent = (initialVolPercent + (fraction * scaleFactor).toInt()).coerceIn(0, maxAllowed)
                                             playerManager.setVolumeWithBoost(targetPercent)
@@ -669,7 +669,7 @@ fun VideoPlayerScreen(
                         val msg = when (nextMode) {
                             DecoderMode.SW -> "Three Decoding Engines: SW (Software Standard, 0%–100% Volume)"
                             DecoderMode.HW -> "Three Decoding Engines: HW (Hardware Standard, 0%–100% Volume)"
-                            DecoderMode.HW_PLUS -> "Three Decoding Engines: HW+ (+100% Audio Boost, 101%–200% up to +20 dB)"
+                            DecoderMode.HW_PLUS -> "Three Decoding Engines: HW+ (+100% Audio Boost, 101%–120% up to +20 dB)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },

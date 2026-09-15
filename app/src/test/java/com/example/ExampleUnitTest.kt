@@ -23,8 +23,8 @@ class ExampleUnitTest {
     assertEquals(100, DecoderMode.SW.maxVolumePercent)
     assertEquals(100, DecoderMode.HW.maxVolumePercent)
 
-    // 3. HW+ volume fixed to 101% - 200% (+100% Audio Boost)
-    assertEquals(200, DecoderMode.HW_PLUS.maxVolumePercent)
+    // 3. HW+ volume fixed to 101% - 120% (+100% Audio Boost up to +20 dB)
+    assertEquals(120, DecoderMode.HW_PLUS.maxVolumePercent)
 
     // 4. Default decoder is SW
     val defaultPrefs = PlayerPreferencesEntity()

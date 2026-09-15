@@ -90,7 +90,7 @@ fun VolumeBrightnessHUD(
             if (isBoosted) {
                 Spacer(modifier = Modifier.height(2.dp))
                 val boostAmount = volumePercent - 100
-                val boostDb = ((boostAmount / 100f) * 20f).toInt()
+                val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(1, 20)
                 Text(
                     text = "+$boostAmount% BOOST (+${boostDb}dB)",
                     color = Color(0xFFFFD54F),
