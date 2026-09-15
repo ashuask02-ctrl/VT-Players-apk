@@ -45,7 +45,7 @@ data class PlayerPreferencesEntity(
     val defaultSpeed: Float = 1.0f,
     val resumePlayback: Boolean = true,
     val backgroundPlayback: Boolean = false,
-    val useHardwareDecoder: Boolean = true,
+    val useHardwareDecoder: Boolean = false,
     val doubleTapAction: String = "SEEK", // "SEEK" or "PLAY_PAUSE"
     val brightnessGesture: Boolean = true,
     val volumeGesture: Boolean = true,
@@ -62,5 +62,5 @@ data class PlayerPreferencesEntity(
     val fontSize: String = "MEDIUM", // "SMALL", "MEDIUM", "LARGE"
     val hideStatusBarInPlayer: Boolean = true, // Hide mobile signal, battery, and time line in player
     val movieOrientation: String = "HORIZONTAL", // "HORIZONTAL", "VERTICAL", "AUTO"
-    val defaultDecoderMode: String = "HW_PLUS" // "HW", "HW_PLUS", "SW"
+    val defaultDecoderMode: String = "SW" // "SW", "HW", "HW_PLUS"
 )

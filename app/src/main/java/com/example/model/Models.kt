@@ -55,9 +55,9 @@ enum class AspectRatioMode(val label: String) {
 }
 
 enum class DecoderMode(val code: String, val label: String, val maxVolumePercent: Int) {
-    SW("SW", "Software Decoder (200% Volume)", 200),
-    HW("HW", "Hardware Decoder", 200),
-    HW_PLUS("HW+", "Hardware+ (200% Volume)", 200)
+    SW("SW", "SW Software Decoder (0%–100% Volume)", 100),
+    HW("HW", "HW Hardware Decoder (0%–100% Volume)", 100),
+    HW_PLUS("HW+", "HW+ Hardware+ (+100% Audio Boost, 101%–200%)", 200)
 }
 
 data class TrackItem(

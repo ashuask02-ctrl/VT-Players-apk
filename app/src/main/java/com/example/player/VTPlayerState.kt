@@ -40,9 +40,9 @@ data class VTPlayerState(
     val audioDelayMs: Long = 0L,
     // Audio boost / Equalizer
     val isAudioBoostActive: Boolean = false,
-    val volumePercent: Int = 100, // Supports up to 200% (100% Volume Boost) in HW, HW+, and SW!
-    val decoderMode: DecoderMode = DecoderMode.HW_PLUS,
-    val hardwareDecoding: Boolean = true,
+    val volumePercent: Int = 100, // Fixed 0%–100% in SW and HW; 101%–200% (+100% Audio Boost) in HW+
+    val decoderMode: DecoderMode = DecoderMode.SW,
+    val hardwareDecoding: Boolean = false,
     val playerSessionId: Long = 0L,
     // Dialog overlays
     val showSpeedDialog: Boolean = false,

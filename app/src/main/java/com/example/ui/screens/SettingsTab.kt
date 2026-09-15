@@ -234,16 +234,16 @@ fun SettingsTab(
                 }
             }
 
-            // Decoder & Hardware (HW / HW+ / SW)
+            // Three Decoding Engines (SW, HW, and HW+)
             item {
-                SettingsSectionHeader("Video Decoder & Volume Boost", Icons.Filled.Memory)
+                SettingsSectionHeader("Three Decoding Engines (SW, HW, and HW+)", Icons.Filled.Memory)
                 SettingsCard {
                     SettingsRow(
                         title = "Default Video Decoder",
                         subtitle = when (prefs.defaultDecoderMode) {
-                            "HW" -> "HW (Hardware Accelerated, 100% Volume Boost)"
-                            "SW" -> "SW (Software Fallback, 100% Volume Boost)"
-                            else -> "HW+ (Hardware+ with 100% Volume Boost - Recommended)"
+                            "HW" -> "HW (Hardware Standard, 0%–100% Volume)"
+                            "HW_PLUS" -> "HW+ (+100% Audio Boost, 101%–200% up to +20 dB)"
+                            else -> "SW (Software Standard, 0%–100% Volume - First Screen)"
                         },
                         onClick = { showDecoderDialog = true }
                     )
@@ -594,12 +594,12 @@ fun SettingsTab(
         )
     }
 
-    // Video Decoder Selection Dialog (SW, HW, HW+)
+    // Video Decoder Selection Dialog: Three Decoding Engines (SW, HW, and HW+)
     if (showDecoderDialog) {
         val decoders = listOf(
-            "SW" to ("SW (Software Fallback)" to "CPU software decoder with 100% volume boost (up to 200% volume). High compatibility for corrupted/exotic codecs."),
-            "HW" to ("HW (Hardware Standard)" to "Standard system hardware decoder with up to 100% volume boost. Low power consumption."),
-            "HW_PLUS" to ("HW+ (Hardware+ Recommended)" to "Hardware acceleration with 100% volume boost (up to 200% volume). Best performance & loud sound.")
+            "SW" to ("SW (Software Standard - First Screen)" to "CPU software decoder fixed to 0% – 100% (Standard device music volume). Maximum codec compatibility."),
+            "HW" to ("HW (Hardware Standard)" to "Standard system hardware decoder fixed to 0% – 100% (Standard device music volume). Low power consumption."),
+            "HW_PLUS" to ("HW+ (Hardware+ Audio Boost)" to "Hardware acceleration with 101% – 200% volume: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.")
         )
         AlertDialog(
             onDismissRequest = { showDecoderDialog = false },
@@ -608,7 +608,7 @@ fun SettingsTab(
             modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
             title = {
                 Text(
-                    text = "Select Video Decoder",
+                    text = "Three Decoding Engines (SW, HW, and HW+)",
                     fontWeight = FontWeight.ExtraBold,
                     color = colorScheme.onSurface,
                     fontSize = 18.sp

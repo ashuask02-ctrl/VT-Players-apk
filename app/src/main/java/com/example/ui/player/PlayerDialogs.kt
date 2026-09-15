@@ -3,6 +3,7 @@ package com.example.ui.player
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +42,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -517,6 +519,8 @@ fun AudioBoostDialog(
     playerState: VTPlayerState,
     onDismiss: () -> Unit
 ) {
+    val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = VTBlack,
@@ -526,17 +530,22 @@ fun AudioBoostDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Audio Boost (200% / 100% Boost)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    text = if (isHwPlus) "HW+ Audio Boost (101% – 200%)" else "Audio Volume (${playerState.decoderMode.code})",
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
             }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Decoder: ${playerState.decoderMode.label}",
+                    text = "Three Decoding Engines: ${playerState.decoderMode.label}",
                     color = when (playerState.decoderMode) {
+                        DecoderMode.SW -> VTAccentBlue
                         DecoderMode.HW -> VTAccentGreen
                         DecoderMode.HW_PLUS -> Color(0xFFFFB300)
-                        DecoderMode.SW -> VTAccentBlue
                     },
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -550,7 +559,8 @@ fun AudioBoostDialog(
                     Text("Volume: ${playerState.volumePercent}%", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     if (playerState.volumePercent > 100) {
                         val boostAmount = playerState.volumePercent - 100
-                        Text("+$boostAmount% BOOST", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        val boostDb = ((boostAmount / 100f) * 20f).toInt()
+                        Text("+$boostAmount% BOOST (+${boostDb}dB)", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -566,11 +576,12 @@ fun AudioBoostDialog(
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                val presets = if (isHwPlus) listOf(50, 100, 150, 200) else listOf(25, 50, 75, 100)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf(50, 100, 150, 200).forEach { preset ->
+                    presets.forEach { preset ->
                         val isSelected = playerState.volumePercent == preset
                         FilterChip(
                             selected = isSelected,
@@ -592,14 +603,39 @@ fun AudioBoostDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (playerState.volumePercent > 100) "Status: BOOST ACTIVE (+${((playerState.volumePercent - 100) * 0.2f).toInt()} dB)"
-                           else if (playerState.isAudioBoostActive) "Status: BOOST ACTIVE"
-                           else "Status: Standard Output",
-                    color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else if (playerState.isAudioBoostActive) VTAccentGreen else Color.Gray,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+                if (isHwPlus) {
+                    val boostAmount = (playerState.volumePercent - 100).coerceAtLeast(0)
+                    val boostDb = ((boostAmount / 100f) * 20f).toInt()
+                    Text(
+                        text = if (playerState.volumePercent > 100)
+                            "Status: BOOST ACTIVE (+${boostDb} dB via Loudness Enhancer)"
+                        else
+                            "Status: HW+ Standard Volume (Increase above 100% for +20 dB boost)",
+                        color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Text(
+                        text = "${playerState.decoderMode.code} volume fixed to 0% – 100% (Standard device music volume).",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = {
+                            playerManager.setDecoderMode(DecoderMode.HW_PLUS)
+                        },
+                        border = BorderStroke(1.dp, Color(0xFFFFB300)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFD54F)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Switch to HW+ for +100% Audio Boost", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         },
         confirmButton = {

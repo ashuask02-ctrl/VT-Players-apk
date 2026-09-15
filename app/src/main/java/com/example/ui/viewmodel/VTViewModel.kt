@@ -242,8 +242,8 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             val prefs = repository.getPreferences()
             val preferredDecoder = when (prefs.defaultDecoderMode) {
                 "HW" -> DecoderMode.HW
-                "SW" -> DecoderMode.SW
-                else -> DecoderMode.HW_PLUS
+                "HW_PLUS" -> DecoderMode.HW_PLUS
+                else -> DecoderMode.SW
             }
             if (playerManager.playerState.value.decoderMode != preferredDecoder) {
                 playerManager.setDecoderMode(preferredDecoder)
@@ -407,12 +407,12 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             if (updated.defaultDecoderMode != current.defaultDecoderMode) {
                 val mode = when (updated.defaultDecoderMode) {
                     "HW" -> DecoderMode.HW
-                    "SW" -> DecoderMode.SW
-                    else -> DecoderMode.HW_PLUS
+                    "HW_PLUS" -> DecoderMode.HW_PLUS
+                    else -> DecoderMode.SW
                 }
                 playerManager.setDecoderMode(mode)
             } else if (updated.useHardwareDecoder != current.useHardwareDecoder) {
-                val mode = if (updated.useHardwareDecoder) DecoderMode.HW_PLUS else DecoderMode.SW
+                val mode = if (updated.useHardwareDecoder) DecoderMode.HW else DecoderMode.SW
                 playerManager.setDecoderMode(mode)
             }
         }

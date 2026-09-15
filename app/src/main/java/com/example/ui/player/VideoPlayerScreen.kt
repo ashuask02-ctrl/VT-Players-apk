@@ -443,11 +443,14 @@ fun VideoPlayerScreen(
                                         }
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
-                                            // Supports full 100% Volume Boost (up to 200% total volume) in HW, HW+, and SW!
+                                            // SW and HW volume fixed to 0% – 100% (Standard device music volume).
+                                            // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by Loudness Enhancer, providing up to +20 dB amplification.
                                             val dragUpDistance = downOffset.y - currentPos.y
+                                            val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
+                                            val maxAllowed = if (isHwPlus) 200 else 100
+                                            val scaleFactor = if (isHwPlus) 150 else 100
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            val maxAllowed = 200
-                                            val targetPercent = (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, maxAllowed)
+                                            val targetPercent = (initialVolPercent + (fraction * scaleFactor).toInt()).coerceIn(0, maxAllowed)
                                             playerManager.setVolumeWithBoost(targetPercent)
                                             hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
@@ -549,6 +552,7 @@ fun VideoPlayerScreen(
             VolumeBrightnessHUD(
                 isVolume = true,
                 volumePercent = percent,
+                maxVolumePercent = playerState.decoderMode.maxVolumePercent,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
@@ -663,9 +667,9 @@ fun VideoPlayerScreen(
                     onToggleHardwareDecoding = {
                         val nextMode = playerManager.cycleDecoderMode()
                         val msg = when (nextMode) {
-                            DecoderMode.HW -> "Decoder: HW (Hardware Accelerated - 100% Boost)"
-                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ with 100% Volume Boost)"
-                            DecoderMode.SW -> "Decoder: SW (Software - 100% Volume Boost)"
+                            DecoderMode.SW -> "Three Decoding Engines: SW (Software Standard, 0%–100% Volume)"
+                            DecoderMode.HW -> "Three Decoding Engines: HW (Hardware Standard, 0%–100% Volume)"
+                            DecoderMode.HW_PLUS -> "Three Decoding Engines: HW+ (+100% Audio Boost, 101%–200% up to +20 dB)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },
@@ -1154,7 +1158,7 @@ fun PlayerTopBar(
                         .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Audio Boost (+12dB)", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        text = { Text("Audio & Boost (HW+ up to +20 dB)", color = VTWhite, fontWeight = FontWeight.Bold) },
                         leadingIcon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite) },
                         onClick = {
                             showMenu = false

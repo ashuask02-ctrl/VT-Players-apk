@@ -89,7 +89,7 @@ class VTPlayerManager(
         override fun onPlayerError(error: PlaybackException) {
             android.util.Log.e("VTPlayerManager", "Player error with mode ${_playerState.value.decoderMode}: ${error.errorCodeName}", error)
             val currentMode = _playerState.value.decoderMode
-            val fallbackMode = if (currentMode == DecoderMode.SW) DecoderMode.HW_PLUS else DecoderMode.SW
+            val fallbackMode = if (currentMode == DecoderMode.SW) DecoderMode.HW else DecoderMode.SW
             coroutineScope.launch(Dispatchers.Main) {
                 val curPos = _playerState.value.currentPosition
                 val curVid = _playerState.value.currentVideo
@@ -105,11 +105,11 @@ class VTPlayerManager(
     }
 
     init {
-        initPlayer(decoderMode = DecoderMode.HW_PLUS)
+        initPlayer(decoderMode = DecoderMode.SW)
     }
 
     fun initPlayer(useHardware: Boolean) {
-        initPlayer(if (useHardware) DecoderMode.HW_PLUS else DecoderMode.SW)
+        initPlayer(if (useHardware) DecoderMode.HW else DecoderMode.SW)
     }
 
     fun initPlayer(decoderMode: DecoderMode = _playerState.value.decoderMode) {
@@ -659,11 +659,14 @@ class VTPlayerManager(
     }
 
     fun setVolumeWithBoost(percent: Int) {
-        val clampedPercent = percent.coerceIn(0, 200)
+        val isHwPlus = _playerState.value.decoderMode == DecoderMode.HW_PLUS
+        val maxAllowed = if (isHwPlus) 200 else 100
+        val clampedPercent = percent.coerceIn(0, maxAllowed)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
 
         if (clampedPercent <= 100) {
+            // SW and HW (and HW+ at <= 100%): Standard device music volume (0% – 100%)
             val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
                 .coerceIn(0, maxStreamVolume)
             try {
@@ -682,12 +685,12 @@ class VTPlayerManager(
                 )
             }
         } else {
-            // Full 100% Volume Boost (101% to 200% total volume, up to +20 dB amplification)
+            // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
             try {
                 audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
             } catch (_: Exception) {}
 
-            val boostFraction = (clampedPercent - 100) / 100f // 0f..1f
+            val boostFraction = (clampedPercent - 100) / 100f // 0.01f .. 1.0f
             val gainMb = (boostFraction * 2000).toInt() // up to +2000 mB (+20 dB amplification)
 
             val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
@@ -736,7 +739,14 @@ class VTPlayerManager(
         val currentIndex = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
-        val currentVolume = _playerState.value.volumePercent
+        
+        // SW and HW volume fixed to 0% – 100% (Standard device music volume).
+        // HW+ volume fixed to 101% – 200%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.
+        val currentVolume = if (newMode == DecoderMode.HW_PLUS) {
+            _playerState.value.volumePercent
+        } else {
+            _playerState.value.volumePercent.coerceIn(0, 100)
+        }
 
         // Switching between HW and HW+ uses the same hardware video codec!
         if ((currentMode == DecoderMode.HW && newMode == DecoderMode.HW_PLUS) ||

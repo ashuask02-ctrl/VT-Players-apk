@@ -44,6 +44,7 @@ fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
     volumePercent: Int = 100, // 0 .. 200
+    maxVolumePercent: Int = 100, // 100 for SW/HW, 200 for HW+
     modifier: Modifier = Modifier
 ) {
     val isBoosted = isVolume && volumePercent > 100
@@ -58,10 +59,10 @@ fun VolumeBrightnessHUD(
     }
 
     val title = if (isVolume) {
-        if (isBoosted) "Volume Boost" else "Volume"
+        if (isBoosted) "HW+ Audio Boost" else "Volume"
     } else "Brightness"
 
-    val displayPercent = if (isVolume) volumePercent.coerceIn(0, 200) else (level * 100).toInt().coerceIn(0, 100)
+    val displayPercent = if (isVolume) volumePercent.coerceIn(0, maxVolumePercent) else (level * 100).toInt().coerceIn(0, 100)
     val accentColor = if (isBoosted) Color(0xFFFFB300) else VTWhite
 
     Box(
@@ -89,16 +90,18 @@ fun VolumeBrightnessHUD(
             if (isBoosted) {
                 Spacer(modifier = Modifier.height(2.dp))
                 val boostAmount = volumePercent - 100
+                val boostDb = ((boostAmount / 100f) * 20f).toInt()
                 Text(
-                    text = "+$boostAmount% BOOST",
+                    text = "+$boostAmount% BOOST (+${boostDb}dB)",
                     color = Color(0xFFFFD54F),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Black
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
+            val maxVolF = if (isVolume) maxVolumePercent.toFloat().coerceAtLeast(100f) else 1f
             val progressFraction = if (isVolume) {
-                (volumePercent / 200f).coerceIn(0f, 1f)
+                (volumePercent / maxVolF).coerceIn(0f, 1f)
             } else {
                 level.coerceIn(0f, 1f)
             }
