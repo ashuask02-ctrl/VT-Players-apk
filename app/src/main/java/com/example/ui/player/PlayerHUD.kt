@@ -43,11 +43,10 @@ import com.example.ui.theme.VTWhite
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
-    volumePercent: Int = 100, // 0 .. 120
-    maxVolumePercent: Int = 120, // 120 for SW, HW, and HW+
+    volumePercent: Int = 100, // 0 .. 100
+    maxVolumePercent: Int = 100, // 100 for SW and HW
     modifier: Modifier = Modifier
 ) {
-    val isBoosted = isVolume && volumePercent > 100
     val icon = if (isVolume) {
         when {
             volumePercent <= 0 -> Icons.Filled.VolumeMute
@@ -58,18 +57,15 @@ fun VolumeBrightnessHUD(
         if (level < 0.5f) Icons.Filled.BrightnessLow else Icons.Filled.BrightnessHigh
     }
 
-    val title = if (isVolume) {
-        if (isBoosted) "Audio Boost (+20dB)" else "Volume"
-    } else "Brightness"
-
+    val title = if (isVolume) "Volume" else "Brightness"
     val displayPercent = if (isVolume) volumePercent.coerceIn(0, maxVolumePercent) else (level * 100).toInt().coerceIn(0, 100)
-    val accentColor = if (isBoosted) Color(0xFFFFB300) else VTWhite
+    val accentColor = VTWhite
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(VTBlack.copy(alpha = 0.88f))
-            .border(1.5.dp, if (isBoosted) Color(0xFFFFB300) else VTWhite, RoundedCornerShape(16.dp))
+            .border(1.5.dp, VTWhite, RoundedCornerShape(16.dp))
             .padding(horizontal = 22.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -87,17 +83,6 @@ fun VolumeBrightnessHUD(
                 fontSize = 19.sp,
                 fontWeight = FontWeight.ExtraBold
             )
-            if (isBoosted) {
-                Spacer(modifier = Modifier.height(2.dp))
-                val boostAmount = volumePercent - 100
-                val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(1, 20)
-                Text(
-                    text = "+$boostAmount% BOOST (+${boostDb}dB)",
-                    color = Color(0xFFFFD54F),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
             Spacer(modifier = Modifier.height(8.dp))
             val maxVolF = if (isVolume) maxVolumePercent.toFloat().coerceAtLeast(100f) else 1f
             val progressFraction = if (isVolume) {

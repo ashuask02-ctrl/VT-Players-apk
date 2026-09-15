@@ -12,19 +12,18 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun threeDecodingEngines_specificationsAreCorrect() {
-    // 1. Sequence SW, HW, HW+
+  fun decodingEngines_specificationsAreCorrect() {
+    // 1. Only SW and HW decoders (no HW+)
     val modes = DecoderMode.entries
+    assertEquals(2, modes.size)
     assertEquals(DecoderMode.SW, modes[0])
     assertEquals(DecoderMode.HW, modes[1])
-    assertEquals(DecoderMode.HW_PLUS, modes[2])
 
-    // 2. SW, HW, and HW+ have standard volume 0% - 100% and Audio Boost up to 120% (+20 dB)
-    assertEquals(120, DecoderMode.SW.maxVolumePercent)
-    assertEquals(120, DecoderMode.HW.maxVolumePercent)
-    assertEquals(120, DecoderMode.HW_PLUS.maxVolumePercent)
+    // 2. SW and HW volume fixed to 0% - 100% (Standard device music volume)
+    assertEquals(100, DecoderMode.SW.maxVolumePercent)
+    assertEquals(100, DecoderMode.HW.maxVolumePercent)
 
-    // 4. Default decoder is SW
+    // 3. Default decoder is SW
     val defaultPrefs = PlayerPreferencesEntity()
     assertEquals("SW", defaultPrefs.defaultDecoderMode)
     assertFalse(defaultPrefs.useHardwareDecoder)

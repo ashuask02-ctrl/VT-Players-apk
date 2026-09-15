@@ -529,7 +529,7 @@ fun AudioBoostDialog(
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Audio & Boost (${playerState.decoderMode.code})",
+                    text = "Audio Volume (${playerState.decoderMode.code})",
                     color = VTWhite,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -539,11 +539,10 @@ fun AudioBoostDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Three Decoding Engines: ${playerState.decoderMode.label}",
+                    text = "Video Decoder: ${playerState.decoderMode.label}",
                     color = when (playerState.decoderMode) {
                         DecoderMode.SW -> VTAccentBlue
                         DecoderMode.HW -> VTAccentGreen
-                        DecoderMode.HW_PLUS -> Color(0xFFFFB300)
                     },
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -555,26 +554,20 @@ fun AudioBoostDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Volume: ${playerState.volumePercent}%", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    if (playerState.volumePercent > 100) {
-                        val boostAmount = playerState.volumePercent - 100
-                        val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(1, 20)
-                        Text("+$boostAmount% BOOST (+${boostDb}dB)", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
-                    }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                val maxVal = playerState.decoderMode.maxVolumePercent.toFloat()
                 Slider(
-                    value = playerState.volumePercent.toFloat().coerceIn(0f, maxVal),
+                    value = playerState.volumePercent.toFloat().coerceIn(0f, 100f),
                     onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
-                    valueRange = 0f..maxVal,
+                    valueRange = 0f..100f,
                     colors = SliderDefaults.colors(
-                        thumbColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
-                        activeTrackColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                        thumbColor = VTWhite,
+                        activeTrackColor = VTWhite,
                         inactiveTrackColor = Color(0xFF333333)
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val presets = listOf(50, 100, 110, 120)
+                val presets = listOf(25, 50, 75, 100)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -586,13 +579,13 @@ fun AudioBoostDialog(
                             onClick = { playerManager.setVolumeWithBoost(preset) },
                             label = {
                                 Text(
-                                    text = if (preset > 100) "${preset}% (+${preset - 100}%)" else "$preset%",
+                                    text = "$preset%",
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (preset > 100) Color(0xFFFFB300) else VTWhite,
+                                selectedContainerColor = VTWhite,
                                 selectedLabelColor = VTBlack,
                                 containerColor = Color(0xFF1E1E1E),
                                 labelColor = VTWhite
@@ -601,20 +594,15 @@ fun AudioBoostDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                val boostAmount = (playerState.volumePercent - 100).coerceAtLeast(0)
-                val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(0, 20)
                 Text(
-                    text = if (playerState.volumePercent > 100)
-                        "Status: BOOST ACTIVE (+${boostDb} dB via Loudness Enhancer)"
-                    else
-                        "Status: Standard Device Volume (0%–100%)",
-                    color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else Color.Gray,
+                    text = "Status: Standard Device Volume (0%–100%)",
+                    color = Color.LightGray,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%).",
+                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume).",
                     color = Color.LightGray,
                     fontSize = 11.sp
                 )
