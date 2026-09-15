@@ -529,7 +529,7 @@ fun AudioBoostDialog(
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Audio Volume (${playerState.decoderMode.code})",
+                    text = "Audio & Boost (${playerState.decoderMode.code})",
                     color = VTWhite,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -537,13 +537,18 @@ fun AudioBoostDialog(
             }
         },
         text = {
+            val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
+            val accentColor = when (playerState.decoderMode) {
+                DecoderMode.SW -> VTAccentBlue
+                DecoderMode.HW -> VTAccentGreen
+                DecoderMode.HW_PLUS -> Color(0xFFFFB300)
+            }
+            val boostDb = if (isHwPlus) (((playerState.volumePercent - 100) / 50f) * 20f).toInt().coerceIn(1, 20) else 0
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Video Decoder: ${playerState.decoderMode.label}",
-                    color = when (playerState.decoderMode) {
-                        DecoderMode.SW -> VTAccentBlue
-                        DecoderMode.HW -> VTAccentGreen
-                    },
+                    color = accentColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
@@ -553,21 +558,47 @@ fun AudioBoostDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Volume: ${playerState.volumePercent}%", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(
+                        text = "Volume: ${playerState.volumePercent}%",
+                        color = if (isHwPlus) Color(0xFFFFB300) else VTWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    if (isHwPlus) {
+                        Text(
+                            text = "+$boostDb dB Boost",
+                            color = Color(0xFFFFB300),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Slider(
-                    value = playerState.volumePercent.toFloat().coerceIn(0f, 100f),
-                    onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
-                    valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = VTWhite,
-                        activeTrackColor = VTWhite,
-                        inactiveTrackColor = Color(0xFF333333)
+                if (isHwPlus) {
+                    Slider(
+                        value = playerState.volumePercent.toFloat().coerceIn(101f, 150f),
+                        onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
+                        valueRange = 101f..150f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFFFFB300),
+                            activeTrackColor = Color(0xFFFFB300),
+                            inactiveTrackColor = Color(0xFF333333)
+                        )
                     )
-                )
+                } else {
+                    Slider(
+                        value = playerState.volumePercent.toFloat().coerceIn(0f, 100f),
+                        onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
+                        valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = VTWhite,
+                            activeTrackColor = VTWhite,
+                            inactiveTrackColor = Color(0xFF333333)
+                        )
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
-                val presets = listOf(25, 50, 75, 100)
+                val presets = if (isHwPlus) listOf(110, 125, 140, 150) else listOf(25, 50, 75, 100)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -585,7 +616,7 @@ fun AudioBoostDialog(
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = VTWhite,
+                                selectedContainerColor = if (isHwPlus) Color(0xFFFFB300) else VTWhite,
                                 selectedLabelColor = VTBlack,
                                 containerColor = Color(0xFF1E1E1E),
                                 labelColor = VTWhite
@@ -595,16 +626,21 @@ fun AudioBoostDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Status: Standard Device Volume (0%–100%)",
-                    color = Color.LightGray,
+                    text = if (isHwPlus) {
+                        "Status: +100% AUDIO BOOST ACTIVE (+$boostDb dB via Loudness Enhancer)"
+                    } else {
+                        "Status: Standard Device Volume (0%–100%)"
+                    },
+                    color = if (isHwPlus) Color(0xFFFFB300) else Color.LightGray,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume).",
+                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume).\nHW+ volume fixed to 101% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.",
                     color = Color.LightGray,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -615,12 +651,17 @@ fun AudioBoostDialog(
                     Text("Decoder:", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     DecoderMode.entries.forEach { mode ->
                         val isCurrent = playerState.decoderMode == mode
+                        val chipColor = when (mode) {
+                            DecoderMode.SW -> VTAccentBlue
+                            DecoderMode.HW -> VTAccentGreen
+                            DecoderMode.HW_PLUS -> Color(0xFFFFB300)
+                        }
                         FilterChip(
                             selected = isCurrent,
                             onClick = { playerManager.setDecoderMode(mode) },
                             label = { Text(mode.code, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = VTWhite,
+                                selectedContainerColor = chipColor,
                                 selectedLabelColor = VTBlack,
                                 containerColor = Color(0xFF1E1E1E),
                                 labelColor = VTWhite

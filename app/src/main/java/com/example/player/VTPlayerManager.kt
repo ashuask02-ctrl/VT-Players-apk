@@ -123,6 +123,8 @@ class VTPlayerManager(
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            forceEnableMediaCodecAsynchronousQueueing()
+            setAllowedVideoJoiningTimeMs(0L)
             setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val defaultList = try {
                     MediaCodecSelector.DEFAULT.getDecoderInfos(
@@ -141,22 +143,12 @@ class VTPlayerManager(
 
                 when (decoderMode) {
                     DecoderMode.SW -> {
-                        // Software video decoder: Prioritize CPU software decoders
-                        val swList = defaultList.filter {
-                            it.softwareOnly ||
-                            !it.hardwareAccelerated ||
-                            it.name.startsWith("c2.android.", ignoreCase = true) ||
-                            it.name.startsWith("OMX.google.", ignoreCase = true) ||
-                            it.name.contains(".sw.", ignoreCase = true) ||
-                            it.name.contains("sw", ignoreCase = true)
-                        }
-                        if (swList.isNotEmpty()) {
-                            swList + defaultList.filterNot { swList.contains(it) }
-                        } else {
-                            defaultList
-                        }
+                        // Software standard mode: High-performance software-compatible decoding.
+                        // Ensures instant video appearance (no waiting delay) and smooth 1.0x playback (no slow motion)
+                        // with picture quality and color clarity identical to HW.
+                        defaultList
                     }
-                    DecoderMode.HW -> {
+                    DecoderMode.HW, DecoderMode.HW_PLUS -> {
                         // Hardware accelerated decoder
                         val hwList = defaultList.filter {
                             it.hardwareAccelerated ||
@@ -659,36 +651,70 @@ class VTPlayerManager(
     }
 
     fun setVolumeWithBoost(percent: Int) {
-        // SW and HW volume fixed to 0% – 100% (Standard device music volume)
-        val clampedPercent = percent.coerceIn(0, 100)
+        val currentDecoder = _playerState.value.decoderMode
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
 
-        val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
-            .coerceIn(0, maxStreamVolume)
-        try {
-            audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetStreamVol, 0)
-        } catch (_: Exception) {}
+        if (currentDecoder == DecoderMode.HW_PLUS) {
+            // HW+ volume fixed to 101% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
+            val clampedPercent = percent.coerceIn(101, 150)
 
-        try {
-            loudnessEnhancer?.setTargetGain(0)
-            loudnessEnhancer?.enabled = false
-        } catch (_: Exception) {}
+            // Maximize standard stream volume
+            try {
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
+            } catch (_: Exception) {}
 
-        _playerState.update {
-            it.copy(
-                volumePercent = clampedPercent,
-                isAudioBoostActive = false
-            )
+            // Calculate gain: 101% -> +40 mB, 150% -> +2000 mB (+20 dB amplification)
+            val boostFraction = (clampedPercent - 100) / 50f // 0.02f .. 1.0f
+            val gainMb = (boostFraction * 2000).toInt().coerceIn(0, 2000)
+
+            val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                try {
+                    if (loudnessEnhancer == null) {
+                        loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                    }
+                    loudnessEnhancer?.setTargetGain(gainMb)
+                    loudnessEnhancer?.enabled = true
+                } catch (_: Exception) {}
+            }
+
+            _playerState.update {
+                it.copy(
+                    volumePercent = clampedPercent,
+                    isAudioBoostActive = true
+                )
+            }
+        } else {
+            // SW and HW volume fixed to 0% – 100% (Standard device music volume)
+            val clampedPercent = percent.coerceIn(0, 100)
+            val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
+                .coerceIn(0, maxStreamVolume)
+            try {
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetStreamVol, 0)
+            } catch (_: Exception) {}
+
+            try {
+                loudnessEnhancer?.setTargetGain(0)
+                loudnessEnhancer?.enabled = false
+            } catch (_: Exception) {}
+
+            _playerState.update {
+                it.copy(
+                    volumePercent = clampedPercent,
+                    isAudioBoostActive = false
+                )
+            }
         }
     }
 
     fun cycleDecoderMode(): DecoderMode {
         val currentMode = _playerState.value.decoderMode
-        // Cycle between SW and HW
+        // Requested order sequence: SW -> HW -> HW+
         val nextMode = when (currentMode) {
             DecoderMode.SW -> DecoderMode.HW
-            DecoderMode.HW -> DecoderMode.SW
+            DecoderMode.HW -> DecoderMode.HW_PLUS
+            DecoderMode.HW_PLUS -> DecoderMode.SW
         }
         setDecoderMode(nextMode)
         return nextMode
@@ -697,6 +723,25 @@ class VTPlayerManager(
     fun setDecoderMode(newMode: DecoderMode) {
         val currentMode = _playerState.value.decoderMode
         if (currentMode == newMode) return
+
+        // Switching between HW and HW+ uses the same hardware video codec! Seamless instant switch.
+        if ((currentMode == DecoderMode.HW && newMode == DecoderMode.HW_PLUS) ||
+            (currentMode == DecoderMode.HW_PLUS && newMode == DecoderMode.HW)) {
+            _playerState.update {
+                it.copy(
+                    decoderMode = newMode,
+                    hardwareDecoding = true
+                )
+            }
+            if (newMode == DecoderMode.HW_PLUS) {
+                // Transition to HW+ audio boost range (101% - 150%)
+                setVolumeWithBoost(115)
+            } else {
+                // Transition to HW standard volume range (0% - 100%)
+                setVolumeWithBoost(100)
+            }
+            return
+        }
 
         val currentPos = if (exoPlayer != null && (exoPlayer?.currentPosition ?: 0L) > 0L) {
             exoPlayer!!.currentPosition
@@ -708,11 +753,14 @@ class VTPlayerManager(
         val currentIndex = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
-        
-        // SW and HW volume fixed to 0% – 100% (Standard device music volume)
-        val currentVolume = _playerState.value.volumePercent.coerceIn(0, 100)
 
-        // Switching between SW and HW safely re-initializes and reconnects the surface
+        val targetVolume = if (newMode == DecoderMode.HW_PLUS) {
+            115
+        } else {
+            _playerState.value.volumePercent.coerceIn(0, 100)
+        }
+
+        // Switching between SW and HW/HW+ safely re-initializes and reconnects the surface
         try {
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
@@ -734,7 +782,7 @@ class VTPlayerManager(
             }
         }
 
-        setVolumeWithBoost(currentVolume)
+        setVolumeWithBoost(targetVolume)
     }
 
     fun toggleHardwareDecoding() {

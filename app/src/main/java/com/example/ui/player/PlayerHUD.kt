@@ -43,10 +43,15 @@ import com.example.ui.theme.VTWhite
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
-    volumePercent: Int = 100, // 0 .. 100
-    maxVolumePercent: Int = 100, // 100 for SW and HW
+    volumePercent: Int = 100, // 0 .. 100 for SW/HW, 101 .. 150 for HW+
+    maxVolumePercent: Int = 100,
     modifier: Modifier = Modifier
 ) {
+    val isBoost = isVolume && volumePercent > 100
+    val boostDb = if (isBoost) (((volumePercent - 100) / 50f) * 20f).toInt().coerceIn(1, 20) else 0
+    val boostColor = Color(0xFFFFB300)
+    val accentColor = if (isBoost) boostColor else VTWhite
+
     val icon = if (isVolume) {
         when {
             volumePercent <= 0 -> Icons.Filled.VolumeMute
@@ -57,15 +62,18 @@ fun VolumeBrightnessHUD(
         if (level < 0.5f) Icons.Filled.BrightnessLow else Icons.Filled.BrightnessHigh
     }
 
-    val title = if (isVolume) "Volume" else "Brightness"
-    val displayPercent = if (isVolume) volumePercent.coerceIn(0, maxVolumePercent) else (level * 100).toInt().coerceIn(0, 100)
-    val accentColor = VTWhite
+    val title = when {
+        isBoost -> "Audio Boost (+20dB)"
+        isVolume -> "Volume"
+        else -> "Brightness"
+    }
+    val displayPercent = if (isVolume) volumePercent.coerceIn(0, 150) else (level * 100).toInt().coerceIn(0, 100)
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(VTBlack.copy(alpha = 0.88f))
-            .border(1.5.dp, VTWhite, RoundedCornerShape(16.dp))
+            .border(1.5.dp, accentColor, RoundedCornerShape(16.dp))
             .padding(horizontal = 22.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -83,10 +91,23 @@ fun VolumeBrightnessHUD(
                 fontSize = 19.sp,
                 fontWeight = FontWeight.ExtraBold
             )
+            if (isBoost) {
+                Spacer(modifier = Modifier.height(2.dp))
+                val boostPercent = ((volumePercent - 100) / 50f * 100).toInt().coerceIn(2, 100)
+                Text(
+                    text = "+$boostPercent% BOOST (+${boostDb}dB)",
+                    color = boostColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
-            val maxVolF = if (isVolume) maxVolumePercent.toFloat().coerceAtLeast(100f) else 1f
             val progressFraction = if (isVolume) {
-                (volumePercent / maxVolF).coerceIn(0f, 1f)
+                if (isBoost) {
+                    (volumePercent / 150f).coerceIn(0f, 1f)
+                } else {
+                    (volumePercent / 100f).coerceIn(0f, 1f)
+                }
             } else {
                 level.coerceIn(0f, 1f)
             }
