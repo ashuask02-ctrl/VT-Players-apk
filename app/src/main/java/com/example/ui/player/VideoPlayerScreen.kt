@@ -326,17 +326,17 @@ fun VideoPlayerScreen(
                     )
                     useController = false
                     this.resizeMode = resizeMode
-                    player = playerManager.getExoPlayer()
                     subtitleView?.setUserDefaultStyle()
                     subtitleView?.setUserDefaultTextSize()
+                    playerManager.attachPlayerView(this)
                 }
             },
             update = { playerView ->
-                val cur = playerManager.getExoPlayer()
-                if (playerView.player !== cur) {
-                    playerView.player = cur
-                }
+                playerManager.attachPlayerView(playerView)
                 playerView.resizeMode = resizeMode
+            },
+            onRelease = {
+                playerManager.attachPlayerView(null)
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -693,7 +693,7 @@ fun VideoPlayerScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
 
-                // Bottom Controls (Transparent B&W progress bar, Middle controls: Reverse, Play/Stop, Forward, Lock, Aspect Ratio, Fullscreen)
+                // Bottom Controls (Transparent B&W progress bar, Middle controls: Previous, Play/Stop, Next, Lock, Aspect Ratio, Fullscreen)
                 PlayerBottomControls(
                     playerState = playerState,
                     isPlaying = playerState.isPlaying,
@@ -701,22 +701,9 @@ fun VideoPlayerScreen(
                     aspectRatioMode = playerState.aspectRatioMode,
                     onSeek = { targetMs -> playerManager.seekTo(targetMs) },
                     onLockClick = { playerManager.toggleControlsLock() },
-                    onReverse = {
-                        if (playerState.currentPosition < 3000L && playerManager.getExoPlayer()?.hasPreviousMediaItem() == true) {
-                            playerManager.previous()
-                        } else {
-                            playerManager.seekBy(-10000L)
-                        }
-                    },
+                    onPrevious = { playerManager.previous() },
                     onPlayPause = { playerManager.togglePlayPause() },
-                    onForward = {
-                        val duration = playerState.duration
-                        if (duration > 0 && (duration - playerState.currentPosition) < 3000L && playerManager.getExoPlayer()?.hasNextMediaItem() == true) {
-                            playerManager.next()
-                        } else {
-                            playerManager.seekBy(10000L)
-                        }
-                    },
+                    onNext = { playerManager.next() },
                     onAspectRatioClick = {
                         panX = 0f
                         panY = 0f
@@ -1212,9 +1199,9 @@ fun PlayerBottomControls(
     aspectRatioMode: AspectRatioMode,
     onSeek: (Long) -> Unit,
     onLockClick: () -> Unit,
-    onReverse: () -> Unit,
+    onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
-    onForward: () -> Unit,
+    onNext: () -> Unit,
     onAspectRatioClick: () -> Unit,
     onFullscreenClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1303,24 +1290,24 @@ fun PlayerBottomControls(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Middle Position: The THREE symbols: [Reverse] [Play Stop] [Forward]
+            // Middle Position: The THREE symbols: [Previous] [Play Stop] [Next]
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(22.dp),
                 modifier = Modifier.testTag("player_middle_controls")
             ) {
-                // ⏪ Reverse symbol (Black & white only)
+                // ⏮️ Previous symbol (Black & white only)
                 IconButton(
-                    onClick = onReverse,
+                    onClick = onPrevious,
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.45f))
-                        .testTag("player_reverse_button")
+                        .testTag("player_previous_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.FastRewind,
-                        contentDescription = "Reverse",
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = "Previous",
                         tint = Color.White,
                         modifier = Modifier.size(32.dp)
                     )
@@ -1344,18 +1331,18 @@ fun PlayerBottomControls(
                     )
                 }
 
-                // ⏩ Forward symbol (Black & white only)
+                // ⏭️ Next symbol (Black & white only)
                 IconButton(
-                    onClick = onForward,
+                    onClick = onNext,
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.45f))
-                        .testTag("player_forward_button")
+                        .testTag("player_next_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.FastForward,
-                        contentDescription = "Forward",
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = "Next",
                         tint = Color.White,
                         modifier = Modifier.size(32.dp)
                     )

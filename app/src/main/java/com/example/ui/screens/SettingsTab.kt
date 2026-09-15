@@ -594,12 +594,12 @@ fun SettingsTab(
         )
     }
 
-    // Video Decoder Selection Dialog (HW, HW+, SW)
+    // Video Decoder Selection Dialog (SW, HW, HW+)
     if (showDecoderDialog) {
         val decoders = listOf(
-            "HW_PLUS" to ("HW+ (Hardware+ Recommended)" to "Hardware acceleration with 100% volume boost (up to 200% volume). Best performance & loud sound."),
+            "SW" to ("SW (Software Fallback)" to "CPU software decoder with 100% volume boost (up to 200% volume). High compatibility for corrupted/exotic codecs."),
             "HW" to ("HW (Hardware Standard)" to "Standard system hardware decoder with up to 100% volume boost. Low power consumption."),
-            "SW" to ("SW (Software Fallback)" to "CPU software decoder with 100% volume boost (up to 200% volume). High compatibility for corrupted/exotic codecs.")
+            "HW_PLUS" to ("HW+ (Hardware+ Recommended)" to "Hardware acceleration with 100% volume boost (up to 200% volume). Best performance & loud sound.")
         )
         AlertDialog(
             onDismissRequest = { showDecoderDialog = false },

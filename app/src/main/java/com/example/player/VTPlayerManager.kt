@@ -17,6 +17,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.PlayerView
 import com.example.model.AspectRatioMode
 import com.example.model.DecoderMode
 import com.example.model.TrackItem
@@ -87,17 +88,17 @@ class VTPlayerManager(
 
         override fun onPlayerError(error: PlaybackException) {
             android.util.Log.e("VTPlayerManager", "Player error with mode ${_playerState.value.decoderMode}: ${error.errorCodeName}", error)
-            // If an error occurs in SW mode, automatically recover smoothly by switching to HW_PLUS
-            if (_playerState.value.decoderMode == DecoderMode.SW) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    val curPos = _playerState.value.currentPosition
-                    val curVid = _playerState.value.currentVideo
-                    val curPlaylist = _playerState.value.playlist
-                    val curIdx = _playerState.value.currentIndex
-                    initPlayer(decoderMode = DecoderMode.HW_PLUS)
-                    if (curVid != null) {
-                        playVideo(curVid, curPlaylist, curIdx, curPos)
-                    }
+            val currentMode = _playerState.value.decoderMode
+            val fallbackMode = if (currentMode == DecoderMode.SW) DecoderMode.HW_PLUS else DecoderMode.SW
+            coroutineScope.launch(Dispatchers.Main) {
+                val curPos = _playerState.value.currentPosition
+                val curVid = _playerState.value.currentVideo
+                val curPlaylist = _playerState.value.playlist
+                val curIdx = _playerState.value.currentIndex
+                initPlayer(decoderMode = fallbackMode)
+                attachedPlayerView?.player = exoPlayer
+                if (curVid != null) {
+                    playVideo(curVid, curPlaylist, curIdx, curPos)
                 }
             }
         }
@@ -192,7 +193,15 @@ class VTPlayerManager(
                 playerSessionId = System.currentTimeMillis()
             )
         }
+        attachedPlayerView?.player = exoPlayer
         startProgressTracking()
+    }
+
+    private var attachedPlayerView: PlayerView? = null
+
+    fun attachPlayerView(view: PlayerView?) {
+        attachedPlayerView = view
+        view?.player = exoPlayer
     }
 
     fun getExoPlayer(): ExoPlayer? = exoPlayer
@@ -703,10 +712,11 @@ class VTPlayerManager(
 
     fun cycleDecoderMode(): DecoderMode {
         val currentMode = _playerState.value.decoderMode
+        // Requested order sequence: SW -> HW -> HW+
         val nextMode = when (currentMode) {
+            DecoderMode.SW -> DecoderMode.HW
             DecoderMode.HW -> DecoderMode.HW_PLUS
             DecoderMode.HW_PLUS -> DecoderMode.SW
-            DecoderMode.SW -> DecoderMode.HW
         }
         setDecoderMode(nextMode)
         return nextMode
@@ -716,15 +726,19 @@ class VTPlayerManager(
         val currentMode = _playerState.value.decoderMode
         if (currentMode == newMode) return
 
-        val currentPos = exoPlayer?.currentPosition ?: _playerState.value.currentPosition
+        val currentPos = if (exoPlayer != null && (exoPlayer?.currentPosition ?: 0L) > 0L) {
+            exoPlayer!!.currentPosition
+        } else {
+            _playerState.value.currentPosition
+        }
         val currentVid = _playerState.value.currentVideo
         val currentPlaylist = _playerState.value.playlist
-        val currentIndex = _playerState.value.currentIndex
+        val currentIndex = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
         val currentVolume = _playerState.value.volumePercent
 
-        // Switching between HW and HW+ keeps the same hardware video codec!
+        // Switching between HW and HW+ uses the same hardware video codec!
         if ((currentMode == DecoderMode.HW && newMode == DecoderMode.HW_PLUS) ||
             (currentMode == DecoderMode.HW_PLUS && newMode == DecoderMode.HW)) {
             _playerState.update {
@@ -733,22 +747,25 @@ class VTPlayerManager(
                     hardwareDecoding = true
                 )
             }
+            setVolumeWithBoost(currentVolume)
             return
         }
 
-        // Switching between SW and HW/HW+ safely re-initializes with the appropriate MediaCodecSelector
+        // Switching between SW and HW/HW+ safely re-initializes and reconnects the surface
         try {
-            exoPlayer?.pause()
+            exoPlayer?.stop()
+            exoPlayer?.clearMediaItems()
         } catch (_: Exception) {}
 
         initPlayer(decoderMode = newMode)
+        attachedPlayerView?.player = exoPlayer
 
         if (currentVid != null) {
             playVideo(
                 video = currentVid,
                 playlist = currentPlaylist,
                 startIndex = currentIndex,
-                resumePosition = currentPos
+                resumePosition = currentPos.coerceAtLeast(0L)
             )
             setPlaybackSpeed(currentSpeed)
             if (!wasPlaying) {
@@ -767,6 +784,8 @@ class VTPlayerManager(
         progressJob?.cancel()
         loudnessEnhancer?.release()
         equalizer?.release()
+        attachedPlayerView?.player = null
+        attachedPlayerView = null
         exoPlayer?.release()
         exoPlayer = null
     }
