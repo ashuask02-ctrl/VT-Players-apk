@@ -7,6 +7,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -83,6 +84,23 @@ class VTPlayerManager(
                 }
             }
         }
+
+        override fun onPlayerError(error: PlaybackException) {
+            android.util.Log.e("VTPlayerManager", "Player error with mode ${_playerState.value.decoderMode}: ${error.errorCodeName}", error)
+            // If an error occurs in SW mode, automatically recover smoothly by switching to HW_PLUS
+            if (_playerState.value.decoderMode == DecoderMode.SW) {
+                coroutineScope.launch(Dispatchers.Main) {
+                    val curPos = _playerState.value.currentPosition
+                    val curVid = _playerState.value.currentVideo
+                    val curPlaylist = _playerState.value.playlist
+                    val curIdx = _playerState.value.currentIndex
+                    initPlayer(decoderMode = DecoderMode.HW_PLUS)
+                    if (curVid != null) {
+                        playVideo(curVid, curPlaylist, curIdx, curPos)
+                    }
+                }
+            }
+        }
     }
 
     init {
@@ -103,10 +121,7 @@ class VTPlayerManager(
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
-            setExtensionRendererMode(
-                if (decoderMode == DecoderMode.SW) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-                else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-            )
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val defaultList = try {
                     MediaCodecSelector.DEFAULT.getDecoderInfos(
@@ -117,14 +132,22 @@ class VTPlayerManager(
                 } catch (e: Exception) {
                     emptyList()
                 }
+
+                // Audio codecs are kept intact so multi-channel/AAC/MP3/AC3 audio decodes reliably in all modes
+                if (!mimeType.startsWith("video/", ignoreCase = true)) {
+                    return@setMediaCodecSelector defaultList
+                }
+
                 when (decoderMode) {
                     DecoderMode.SW -> {
-                        // Software decoder: Prioritize software codecs
+                        // Software video decoder: Prioritize CPU software decoders
                         val swList = defaultList.filter {
                             it.softwareOnly ||
+                            !it.hardwareAccelerated ||
                             it.name.startsWith("c2.android.", ignoreCase = true) ||
                             it.name.startsWith("OMX.google.", ignoreCase = true) ||
-                            it.name.contains(".sw.", ignoreCase = true)
+                            it.name.contains(".sw.", ignoreCase = true) ||
+                            it.name.contains("sw", ignoreCase = true)
                         }
                         if (swList.isNotEmpty()) {
                             swList + defaultList.filterNot { swList.contains(it) }
@@ -627,8 +650,7 @@ class VTPlayerManager(
     }
 
     fun setVolumeWithBoost(percent: Int) {
-        val maxAllowed = if (_playerState.value.decoderMode == DecoderMode.HW) 100 else 150
-        val clampedPercent = percent.coerceIn(0, maxAllowed)
+        val clampedPercent = percent.coerceIn(0, 200)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
 
@@ -651,13 +673,13 @@ class VTPlayerManager(
                 )
             }
         } else {
-            // Boost volume (101% to 150%) - Available in HW+ and SW!
+            // Full 100% Volume Boost (101% to 200% total volume, up to +20 dB amplification)
             try {
                 audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
             } catch (_: Exception) {}
 
-            val boostFraction = (clampedPercent - 100) / 50f // 0f..1f
-            val gainMb = (boostFraction * 1500).toInt() // up to +1500 mB (+15 dB)
+            val boostFraction = (clampedPercent - 100) / 100f // 0f..1f
+            val gainMb = (boostFraction * 2000).toInt() // up to +2000 mB (+20 dB amplification)
 
             val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
             if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
@@ -700,6 +722,7 @@ class VTPlayerManager(
         val currentIndex = _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
+        val currentVolume = _playerState.value.volumePercent
 
         // Switching between HW and HW+ keeps the same hardware video codec!
         if ((currentMode == DecoderMode.HW && newMode == DecoderMode.HW_PLUS) ||
@@ -710,13 +733,14 @@ class VTPlayerManager(
                     hardwareDecoding = true
                 )
             }
-            if (newMode == DecoderMode.HW && _playerState.value.volumePercent > 100) {
-                setVolumeWithBoost(100)
-            }
             return
         }
 
-        // Switching between SW and HW/HW+ re-initializes with the appropriate MediaCodecSelector
+        // Switching between SW and HW/HW+ safely re-initializes with the appropriate MediaCodecSelector
+        try {
+            exoPlayer?.pause()
+        } catch (_: Exception) {}
+
         initPlayer(decoderMode = newMode)
 
         if (currentVid != null) {
@@ -732,12 +756,7 @@ class VTPlayerManager(
             }
         }
 
-        val targetVol = if (newMode == DecoderMode.HW) {
-            _playerState.value.volumePercent.coerceAtMost(100)
-        } else {
-            _playerState.value.volumePercent
-        }
-        setVolumeWithBoost(targetVol)
+        setVolumeWithBoost(currentVolume)
     }
 
     fun toggleHardwareDecoding() {

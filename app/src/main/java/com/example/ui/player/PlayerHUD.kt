@@ -43,7 +43,7 @@ import com.example.ui.theme.VTWhite
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
-    volumePercent: Int = 100, // 0 .. 150
+    volumePercent: Int = 100, // 0 .. 200
     modifier: Modifier = Modifier
 ) {
     val isBoosted = isVolume && volumePercent > 100
@@ -58,10 +58,10 @@ fun VolumeBrightnessHUD(
     }
 
     val title = if (isVolume) {
-        if (isBoosted) "HW+ Volume Boost" else "Volume"
+        if (isBoosted) "Volume Boost" else "Volume"
     } else "Brightness"
 
-    val displayPercent = if (isVolume) volumePercent.coerceIn(0, 150) else (level * 100).toInt().coerceIn(0, 100)
+    val displayPercent = if (isVolume) volumePercent.coerceIn(0, 200) else (level * 100).toInt().coerceIn(0, 100)
     val accentColor = if (isBoosted) Color(0xFFFFB300) else VTWhite
 
     Box(
@@ -88,8 +88,9 @@ fun VolumeBrightnessHUD(
             )
             if (isBoosted) {
                 Spacer(modifier = Modifier.height(2.dp))
+                val boostAmount = volumePercent - 100
                 Text(
-                    text = "HW+ BOOST",
+                    text = "+$boostAmount% BOOST",
                     color = Color(0xFFFFD54F),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Black
@@ -97,7 +98,7 @@ fun VolumeBrightnessHUD(
             }
             Spacer(modifier = Modifier.height(8.dp))
             val progressFraction = if (isVolume) {
-                (volumePercent / 150f).coerceIn(0f, 1f)
+                (volumePercent / 200f).coerceIn(0f, 1f)
             } else {
                 level.coerceIn(0f, 1f)
             }

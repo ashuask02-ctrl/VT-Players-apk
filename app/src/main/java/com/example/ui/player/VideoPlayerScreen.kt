@@ -317,38 +317,36 @@ fun VideoPlayerScreen(
             .background(VTBlack)
     ) {
         // Video Surface via AndroidView
-        key(playerState.playerSessionId) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        useController = false
-                        this.resizeMode = resizeMode
-                        player = playerManager.getExoPlayer()
-                        subtitleView?.setUserDefaultStyle()
-                        subtitleView?.setUserDefaultTextSize()
-                    }
-                },
-                update = { playerView ->
-                    val cur = playerManager.getExoPlayer()
-                    if (playerView.player !== cur) {
-                        playerView.player = cur
-                    }
-                    playerView.resizeMode = resizeMode
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = playerState.gestureZoomScale,
-                        scaleY = playerState.gestureZoomScale,
-                        translationX = panX,
-                        translationY = panY
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
                     )
-            )
-        }
+                    useController = false
+                    this.resizeMode = resizeMode
+                    player = playerManager.getExoPlayer()
+                    subtitleView?.setUserDefaultStyle()
+                    subtitleView?.setUserDefaultTextSize()
+                }
+            },
+            update = { playerView ->
+                val cur = playerManager.getExoPlayer()
+                if (playerView.player !== cur) {
+                    playerView.player = cur
+                }
+                playerView.resizeMode = resizeMode
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = playerState.gestureZoomScale,
+                    scaleY = playerState.gestureZoomScale,
+                    translationX = panX,
+                    translationY = panY
+                )
+        )
 
         // Gestures Layer (Unified single pointer handler for tap, double-tap, vertical drag volume/brightness, horizontal seek, and 2-finger zoom)
         Box(
@@ -445,11 +443,11 @@ fun VideoPlayerScreen(
                                         }
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
-                                            // Supports up to 150% in HW+ and SW modes!
+                                            // Supports full 100% Volume Boost (up to 200% total volume) in HW, HW+, and SW!
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            val maxAllowed = if (playerState.decoderMode == DecoderMode.HW) 100 else 150
-                                            val targetPercent = (initialVolPercent + (fraction * maxAllowed).toInt()).coerceIn(0, maxAllowed)
+                                            val maxAllowed = 200
+                                            val targetPercent = (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, maxAllowed)
                                             playerManager.setVolumeWithBoost(targetPercent)
                                             hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
@@ -665,9 +663,9 @@ fun VideoPlayerScreen(
                     onToggleHardwareDecoding = {
                         val nextMode = playerManager.cycleDecoderMode()
                         val msg = when (nextMode) {
-                            DecoderMode.HW -> "Decoder: HW (Hardware Accelerated, Max 100% Vol)"
-                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ with 150% Volume Boost)"
-                            DecoderMode.SW -> "Decoder: SW (Software - 150% Volume Boost)"
+                            DecoderMode.HW -> "Decoder: HW (Hardware Accelerated - 100% Boost)"
+                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ with 100% Volume Boost)"
+                            DecoderMode.SW -> "Decoder: SW (Software - 100% Volume Boost)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },
@@ -695,7 +693,7 @@ fun VideoPlayerScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
 
-                // Bottom Controls (Current time, Blue progress bar, Remaining time, Lock, Prev, Play/Pause, Next, Aspect Ratio, Fullscreen)
+                // Bottom Controls (Transparent B&W progress bar, Middle controls: Reverse, Play/Stop, Forward, Lock, Aspect Ratio, Fullscreen)
                 PlayerBottomControls(
                     playerState = playerState,
                     isPlaying = playerState.isPlaying,
@@ -703,9 +701,22 @@ fun VideoPlayerScreen(
                     aspectRatioMode = playerState.aspectRatioMode,
                     onSeek = { targetMs -> playerManager.seekTo(targetMs) },
                     onLockClick = { playerManager.toggleControlsLock() },
-                    onPrevious = { playerManager.previous() },
+                    onReverse = {
+                        if (playerState.currentPosition < 3000L && playerManager.getExoPlayer()?.hasPreviousMediaItem() == true) {
+                            playerManager.previous()
+                        } else {
+                            playerManager.seekBy(-10000L)
+                        }
+                    },
                     onPlayPause = { playerManager.togglePlayPause() },
-                    onNext = { playerManager.next() },
+                    onForward = {
+                        val duration = playerState.duration
+                        if (duration > 0 && (duration - playerState.currentPosition) < 3000L && playerManager.getExoPlayer()?.hasNextMediaItem() == true) {
+                            playerManager.next()
+                        } else {
+                            playerManager.seekBy(10000L)
+                        }
+                    },
                     onAspectRatioClick = {
                         panX = 0f
                         panY = 0f
@@ -1201,9 +1212,9 @@ fun PlayerBottomControls(
     aspectRatioMode: AspectRatioMode,
     onSeek: (Long) -> Unit,
     onLockClick: () -> Unit,
-    onPrevious: () -> Unit,
+    onReverse: () -> Unit,
     onPlayPause: () -> Unit,
-    onNext: () -> Unit,
+    onForward: () -> Unit,
     onAspectRatioClick: () -> Unit,
     onFullscreenClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1215,23 +1226,26 @@ fun PlayerBottomControls(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .background(Color.Transparent)
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        // Row 1: Current time, Blue progress/seek bar, Remaining time
+        // Row 1: Transparent only black and white progress bar
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Transparent),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Current time
+            // Current time (pure white)
             Text(
                 text = if (isDraggingSeek) formatMs(tempPosition.toLong()) else playerState.formattedCurrentTime,
-                color = VTWhite,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(end = 10.dp)
             )
 
-            // Blue progress/seek bar
+            // Progress/seek bar (transparent background, only black and white)
             Slider(
                 value = if (isDraggingSeek) tempPosition else playerState.currentPosition.toFloat(),
                 onValueChange = {
@@ -1244,133 +1258,159 @@ fun PlayerBottomControls(
                 },
                 valueRange = 0f..(playerState.duration.coerceAtLeast(1L).toFloat()),
                 colors = SliderDefaults.colors(
-                    thumbColor = VTAccentBlue,
-                    activeTrackColor = VTAccentBlue,
-                    inactiveTrackColor = Color(0xFF333333)
+                    thumbColor = Color.White,
+                    activeTrackColor = Color.White,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.35f)
                 ),
                 modifier = Modifier
                     .weight(1f)
                     .testTag("player_seek_bar")
             )
 
-            // Remaining time
+            // Remaining time (black & white: translucent white)
             Text(
                 text = playerState.formattedRemainingTime,
-                color = Color(0xFFCCCCCC),
+                color = Color.White.copy(alpha = 0.8f),
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(start = 10.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Row 2: 🔒 Lock, ⏮️ Previous, ⏸️ Play/Pause, ⏭️ Next, ↔️ Aspect Ratio, ⛶ Fullscreen
+        // Row 2: 🔒 Lock on left, THREE SYMBOLS in the middle position (Reverse, Play Stop, Forward), and Aspect Ratio / Fullscreen on right
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 🔒 Lock
+            // 🔒 Lock button (Left)
             IconButton(
                 onClick = onLockClick,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier
+                    .size(44.dp)
+                    .testTag("player_lock_button")
             ) {
                 Icon(
                     imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
                     contentDescription = "Lock Controls",
-                    tint = VTWhite,
+                    tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             }
 
-            // ⏮️ Previous
-            IconButton(
-                onClick = onPrevious,
-                modifier = Modifier.size(46.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = VTWhite,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+            Spacer(modifier = Modifier.weight(1f))
 
-            // ⏸️ Play/Pause
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(VTAccentBlue)
-                    .clickable(onClick = onPlayPause)
-                    .testTag("player_play_pause_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = VTWhite,
-                    modifier = Modifier.size(34.dp)
-                )
-            }
-
-            // ⏭️ Next
-            IconButton(
-                onClick = onNext,
-                modifier = Modifier.size(46.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "Next",
-                    tint = VTWhite,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-
-            // ↔️ Aspect Ratio
+            // Middle Position: The THREE symbols: [Reverse] [Play Stop] [Forward]
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onAspectRatioClick)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                modifier = Modifier.testTag("player_middle_controls")
             ) {
-                Icon(
-                    imageVector = Icons.Filled.AspectRatio,
-                    contentDescription = "Aspect Ratio",
-                    tint = VTWhite,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = when (aspectRatioMode) {
-                        AspectRatioMode.FIT -> "Fit"
-                        AspectRatioMode.STRETCH -> "Stretch"
-                        AspectRatioMode.CROP_ZOOM -> "Crop"
-                        AspectRatioMode.RATIO_16_9 -> "16:9"
-                        AspectRatioMode.RATIO_4_3 -> "4:3"
-                        AspectRatioMode.RATIO_1_1 -> "1:1"
-                    },
-                    color = VTWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
-                )
+                // ⏪ Reverse symbol (Black & white only)
+                IconButton(
+                    onClick = onReverse,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .testTag("player_reverse_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FastRewind,
+                        contentDescription = "Reverse",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                // ⏸️ / ▶️ Play Stop symbol (Not color! Only black and white show)
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .clickable(onClick = onPlayPause)
+                        .testTag("player_play_pause_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Stop / Pause" else "Play",
+                        tint = Color.Black,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                // ⏩ Forward symbol (Black & white only)
+                IconButton(
+                    onClick = onForward,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .testTag("player_forward_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FastForward,
+                        contentDescription = "Forward",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
 
-            // ⛶ Fullscreen
-            IconButton(
-                onClick = onFullscreenClick,
-                modifier = Modifier.size(44.dp)
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Right side: ↔️ Aspect Ratio & ⛶ Fullscreen
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Fullscreen,
-                    contentDescription = "Fullscreen",
-                    tint = VTWhite,
-                    modifier = Modifier.size(26.dp)
-                )
+                // ↔️ Aspect Ratio
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onAspectRatioClick)
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AspectRatio,
+                        contentDescription = "Aspect Ratio",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = when (aspectRatioMode) {
+                            AspectRatioMode.FIT -> "Fit"
+                            AspectRatioMode.STRETCH -> "Stretch"
+                            AspectRatioMode.CROP_ZOOM -> "Crop"
+                            AspectRatioMode.RATIO_16_9 -> "16:9"
+                            AspectRatioMode.RATIO_4_3 -> "4:3"
+                            AspectRatioMode.RATIO_1_1 -> "1:1"
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                }
+
+                // ⛶ Fullscreen
+                IconButton(
+                    onClick = onFullscreenClick,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Fullscreen,
+                        contentDescription = "Fullscreen",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
         }
     }

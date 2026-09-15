@@ -526,7 +526,7 @@ fun AudioBoostDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Audio Boost (150%)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Audio Boost (200% / 100% Boost)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         },
         text = {
@@ -549,7 +549,8 @@ fun AudioBoostDialog(
                 ) {
                     Text("Volume: ${playerState.volumePercent}%", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     if (playerState.volumePercent > 100) {
-                        Text("HW+ 150% BOOST", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        val boostAmount = playerState.volumePercent - 100
+                        Text("+$boostAmount% BOOST", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -565,8 +566,34 @@ fun AudioBoostDialog(
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(50, 100, 150, 200).forEach { preset ->
+                        val isSelected = playerState.volumePercent == preset
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { playerManager.setVolumeWithBoost(preset) },
+                            label = {
+                                Text(
+                                    text = if (preset > 100) "${preset}% (+${preset - 100}%)" else "$preset%",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = if (preset > 100) Color(0xFFFFB300) else VTWhite,
+                                selectedLabelColor = VTBlack,
+                                containerColor = Color(0xFF1E1E1E),
+                                labelColor = VTWhite
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (playerState.volumePercent > 100) "Status: BOOST ACTIVE (+${((playerState.volumePercent - 100) * 0.3f).toInt()} dB)"
+                    text = if (playerState.volumePercent > 100) "Status: BOOST ACTIVE (+${((playerState.volumePercent - 100) * 0.2f).toInt()} dB)"
                            else if (playerState.isAudioBoostActive) "Status: BOOST ACTIVE"
                            else "Status: Standard Output",
                     color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else if (playerState.isAudioBoostActive) VTAccentGreen else Color.Gray,
