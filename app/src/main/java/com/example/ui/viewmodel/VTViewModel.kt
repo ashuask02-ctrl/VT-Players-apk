@@ -11,6 +11,7 @@ import com.example.data.PlaybackRecordEntity
 import com.example.data.PlayerPreferencesEntity
 import com.example.data.PlaylistEntity
 import com.example.data.VTRepository
+import com.example.model.DecoderMode
 import com.example.model.FolderItem
 import com.example.model.SortOrder
 import com.example.model.StreamPreset
@@ -239,6 +240,15 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         _activePlayingVideo.value = video
         viewModelScope.launch {
             val prefs = repository.getPreferences()
+            val preferredDecoder = when (prefs.defaultDecoderMode) {
+                "HW" -> DecoderMode.HW
+                "SW" -> DecoderMode.SW
+                else -> DecoderMode.HW_PLUS
+            }
+            if (playerManager.playerState.value.decoderMode != preferredDecoder) {
+                playerManager.setDecoderMode(preferredDecoder)
+            }
+
             val record = repository.getRecordByUri(video.uriString)
             val savedPos = record?.lastPosition ?: video.lastPosition
             val totalDur = if ((record?.duration ?: 0L) > 0) record!!.duration else video.duration
@@ -394,8 +404,16 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             val updated = updateBlock(current)
             repository.savePreferences(updated)
             // Apply decoder mode if changed
-            if (updated.useHardwareDecoder != current.useHardwareDecoder) {
-                playerManager.initPlayer(useHardware = updated.useHardwareDecoder)
+            if (updated.defaultDecoderMode != current.defaultDecoderMode) {
+                val mode = when (updated.defaultDecoderMode) {
+                    "HW" -> DecoderMode.HW
+                    "SW" -> DecoderMode.SW
+                    else -> DecoderMode.HW_PLUS
+                }
+                playerManager.setDecoderMode(mode)
+            } else if (updated.useHardwareDecoder != current.useHardwareDecoder) {
+                val mode = if (updated.useHardwareDecoder) DecoderMode.HW_PLUS else DecoderMode.SW
+                playerManager.setDecoderMode(mode)
             }
         }
     }

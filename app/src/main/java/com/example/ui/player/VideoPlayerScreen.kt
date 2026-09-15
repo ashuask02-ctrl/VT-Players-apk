@@ -12,6 +12,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -93,6 +94,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,6 +120,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.model.AspectRatioMode
+import com.example.model.DecoderMode
 import com.example.model.VideoItem
 import com.example.player.VTPlayerState
 import com.example.ui.theme.VTAccentBlue
@@ -204,7 +207,7 @@ fun VideoPlayerScreen(
     }
 
     // HUD gesture display states
-    var hudVolume by remember { mutableStateOf<Float?>(null) }
+    var hudVolumePercent by remember { mutableStateOf<Int?>(null) }
     var hudBrightness by remember { mutableStateOf<Float?>(null) }
     var hudSeekDelta by remember { mutableStateOf<Long?>(null) }
     var hudSeekTarget by remember { mutableStateOf("") }
@@ -291,7 +294,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(hudHideTrigger) {
         if (hudHideTrigger > 0L) {
             delay(1200)
-            hudVolume = null
+            hudVolumePercent = null
             hudBrightness = null
             hudSeekDelta = null
             hudZoomScale = null
@@ -314,33 +317,38 @@ fun VideoPlayerScreen(
             .background(VTBlack)
     ) {
         // Video Surface via AndroidView
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
+        key(playerState.playerSessionId) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        useController = false
+                        this.resizeMode = resizeMode
+                        player = playerManager.getExoPlayer()
+                        subtitleView?.setUserDefaultStyle()
+                        subtitleView?.setUserDefaultTextSize()
+                    }
+                },
+                update = { playerView ->
+                    val cur = playerManager.getExoPlayer()
+                    if (playerView.player !== cur) {
+                        playerView.player = cur
+                    }
+                    playerView.resizeMode = resizeMode
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = playerState.gestureZoomScale,
+                        scaleY = playerState.gestureZoomScale,
+                        translationX = panX,
+                        translationY = panY
                     )
-                    useController = false
-                    this.resizeMode = resizeMode
-                    player = playerManager.getExoPlayer()
-                    subtitleView?.setUserDefaultStyle()
-                    subtitleView?.setUserDefaultTextSize()
-                }
-            },
-            update = { playerView ->
-                playerView.player = playerManager.getExoPlayer()
-                playerView.resizeMode = resizeMode
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = playerState.gestureZoomScale,
-                    scaleY = playerState.gestureZoomScale,
-                    translationX = panX,
-                    translationY = panY
-                )
-        )
+            )
+        }
 
         // Gestures Layer (Unified single pointer handler for tap, double-tap, vertical drag volume/brightness, horizontal seek, and 2-finger zoom)
         Box(
@@ -357,9 +365,8 @@ fun VideoPlayerScreen(
                         val screenWidth = size.width.toFloat()
                         val screenHeight = size.height.toFloat()
 
-                        // Initialize continuous floating-point volume starting from current stream volume
-                        val initialVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
-                        var currentFloatVol = initialVol
+                        // Initialize starting volume percentage from player state
+                        val initialVolPercent = playerState.volumePercent
 
                         val window = activity?.window
                         val currentWinBrightness = window?.attributes?.screenBrightness ?: -1f
@@ -438,14 +445,13 @@ fun VideoPlayerScreen(
                                         }
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
+                                            // Supports up to 150% in HW+ and SW modes!
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            currentFloatVol = (initialVol + fraction * maxVolume).coerceIn(0f, maxVolume)
-                                            val intVol = kotlin.math.round(currentFloatVol).toInt().coerceIn(0, maxVolume.toInt())
-                                            try {
-                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, intVol, 0)
-                                            } catch (_: Exception) {}
-                                            hudVolume = (currentFloatVol / maxVolume).coerceIn(0f, 1f)
+                                            val maxAllowed = if (playerState.decoderMode == DecoderMode.HW) 100 else 150
+                                            val targetPercent = (initialVolPercent + (fraction * maxAllowed).toInt()).coerceIn(0, maxAllowed)
+                                            playerManager.setVolumeWithBoost(targetPercent)
+                                            hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
                                         }
                                         3 -> {
@@ -541,10 +547,10 @@ fun VideoPlayerScreen(
         }
 
         // On-Screen HUD Overlays (Volume, Brightness, Seek)
-        hudVolume?.let { level ->
+        hudVolumePercent?.let { percent ->
             VolumeBrightnessHUD(
                 isVolume = true,
-                level = level,
+                volumePercent = percent,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
@@ -656,7 +662,15 @@ fun VideoPlayerScreen(
                     onBack = onBack,
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
-                    onToggleHardwareDecoding = { playerManager.toggleHardwareDecoding() },
+                    onToggleHardwareDecoding = {
+                        val nextMode = playerManager.cycleDecoderMode()
+                        val msg = when (nextMode) {
+                            DecoderMode.HW -> "Decoder: HW (Hardware Accelerated, Max 100% Vol)"
+                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ with 150% Volume Boost)"
+                            DecoderMode.SW -> "Decoder: SW (Software - 150% Volume Boost)"
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    },
                     onSpeedClick = { playerManager.setShowSpeedDialog(true) },
                     onScreenshotClick = { takeScreenshot() },
                     onAudioModeClick = { playerManager.toggleBackgroundPlayback() },
@@ -1027,20 +1041,37 @@ fun PlayerTopBar(
                 )
             }
 
-            // HW Decoder Toggle (HW / SW)
+            // Decoder Mode Toggle Badge (HW / HW+ / SW)
+            val decoderMode = playerState.decoderMode
+            val badgeBgColor = when (decoderMode) {
+                DecoderMode.HW -> VTAccentGreen.copy(alpha = 0.25f)
+                DecoderMode.HW_PLUS -> Color(0xFFFF9800).copy(alpha = 0.30f)
+                DecoderMode.SW -> VTAccentBlue.copy(alpha = 0.25f)
+            }
+            val badgeBorderColor = when (decoderMode) {
+                DecoderMode.HW -> VTAccentGreen
+                DecoderMode.HW_PLUS -> Color(0xFFFFB300)
+                DecoderMode.SW -> VTAccentBlue
+            }
+            val badgeTextColor = when (decoderMode) {
+                DecoderMode.HW -> VTAccentGreen
+                DecoderMode.HW_PLUS -> Color(0xFFFFD54F)
+                DecoderMode.SW -> VTAccentBlue
+            }
+
             Box(
                 modifier = Modifier
                     .padding(horizontal = 3.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (playerState.hardwareDecoding) VTAccentGreen.copy(alpha = 0.25f) else Color(0xFF2C2C2C))
-                    .border(1.dp, if (playerState.hardwareDecoding) VTAccentGreen else Color.Gray, RoundedCornerShape(6.dp))
+                    .background(badgeBgColor)
+                    .border(1.dp, badgeBorderColor, RoundedCornerShape(6.dp))
                     .clickable(onClick = onToggleHardwareDecoding)
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (playerState.hardwareDecoding) "HW" else "SW",
-                    color = if (playerState.hardwareDecoding) VTAccentGreen else VTWhite,
+                    text = decoderMode.code,
+                    color = badgeTextColor,
                     fontWeight = FontWeight.Black,
                     fontSize = 11.sp
                 )

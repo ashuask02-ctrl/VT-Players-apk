@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import com.example.model.AspectRatioMode
+import com.example.model.DecoderMode
 import com.example.player.VTPlayerManager
 import com.example.player.VTPlayerState
 import com.example.ui.theme.VTAccentBlue
@@ -525,37 +526,50 @@ fun AudioBoostDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Audio Boost & Equalizer", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Audio Boost (150%)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Decoder: ${playerState.decoderMode.label}",
+                    color = when (playerState.decoderMode) {
+                        DecoderMode.HW -> VTAccentGreen
+                        DecoderMode.HW_PLUS -> Color(0xFFFFB300)
+                        DecoderMode.SW -> VTAccentBlue
+                    },
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Audio Boost (+12dB)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text("Increases volume past maximum for quiet audio clips", color = Color(0xFFAAAAAA), fontSize = 12.sp)
+                    Text("Volume: ${playerState.volumePercent}%", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (playerState.volumePercent > 100) {
+                        Text("HW+ 150% BOOST", color = Color(0xFFFFD54F), fontWeight = FontWeight.Black, fontSize = 11.sp)
                     }
-                    Switch(
-                        checked = playerState.isAudioBoostActive,
-                        onCheckedChange = { playerManager.toggleAudioBoost() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = VTBlack,
-                            checkedTrackColor = VTWhite,
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = VTDarkCard
-                        )
-                    )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                val maxVal = playerState.decoderMode.maxVolumePercent.toFloat()
+                Slider(
+                    value = playerState.volumePercent.toFloat().coerceIn(0f, maxVal),
+                    onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
+                    valueRange = 0f..maxVal,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                        activeTrackColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                        inactiveTrackColor = Color(0xFF333333)
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (playerState.isAudioBoostActive) "Status: BOOST ACTIVE (+12 dB)" else "Status: Standard Output",
-                    color = if (playerState.isAudioBoostActive) VTAccentGreen else Color.Gray,
+                    text = if (playerState.volumePercent > 100) "Status: BOOST ACTIVE (+${((playerState.volumePercent - 100) * 0.3f).toInt()} dB)"
+                           else if (playerState.isAudioBoostActive) "Status: BOOST ACTIVE"
+                           else "Status: Standard Output",
+                    color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else if (playerState.isAudioBoostActive) VTAccentGreen else Color.Gray,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )

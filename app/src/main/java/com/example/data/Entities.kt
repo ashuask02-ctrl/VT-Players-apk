@@ -61,5 +61,6 @@ data class PlayerPreferencesEntity(
     val language: String = "EN",
     val fontSize: String = "MEDIUM", // "SMALL", "MEDIUM", "LARGE"
     val hideStatusBarInPlayer: Boolean = true, // Hide mobile signal, battery, and time line in player
-    val movieOrientation: String = "HORIZONTAL" // "HORIZONTAL", "VERTICAL", "AUTO"
+    val movieOrientation: String = "HORIZONTAL", // "HORIZONTAL", "VERTICAL", "AUTO"
+    val defaultDecoderMode: String = "HW_PLUS" // "HW", "HW_PLUS", "SW"
 )

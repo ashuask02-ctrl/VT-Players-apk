@@ -1,6 +1,7 @@
 package com.example.player
 
 import com.example.model.AspectRatioMode
+import com.example.model.DecoderMode
 import com.example.model.TrackItem
 import com.example.model.VideoItem
 
@@ -39,7 +40,10 @@ data class VTPlayerState(
     val audioDelayMs: Long = 0L,
     // Audio boost / Equalizer
     val isAudioBoostActive: Boolean = false,
+    val volumePercent: Int = 100, // Supports up to 150% in HW+ and SW!
+    val decoderMode: DecoderMode = DecoderMode.HW_PLUS,
     val hardwareDecoding: Boolean = true,
+    val playerSessionId: Long = 0L,
     // Dialog overlays
     val showSpeedDialog: Boolean = false,
     val showTracksDialog: Boolean = false,

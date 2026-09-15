@@ -77,6 +77,7 @@ fun SettingsTab(
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showOrientationDialog by remember { mutableStateOf(false) }
+    var showDecoderDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -233,17 +234,18 @@ fun SettingsTab(
                 }
             }
 
-            // Decoder & Hardware
+            // Decoder & Hardware (HW / HW+ / SW)
             item {
-                SettingsSectionHeader("Video Decoder", Icons.Filled.Memory)
+                SettingsSectionHeader("Video Decoder & Volume Boost", Icons.Filled.Memory)
                 SettingsCard {
-                    SettingsSwitchRow(
-                        title = "Hardware Acceleration",
-                        subtitle = if (prefs.useHardwareDecoder) "Hardware Decoder (Fastest, battery efficient)" else "Software Decoder (Fallback compatibility)",
-                        checked = prefs.useHardwareDecoder,
-                        onCheckedChange = { chk ->
-                            viewModel.updatePreferences { it.copy(useHardwareDecoder = chk) }
-                        }
+                    SettingsRow(
+                        title = "Default Video Decoder",
+                        subtitle = when (prefs.defaultDecoderMode) {
+                            "HW" -> "HW (Hardware Accelerated, Max 100% Volume)"
+                            "SW" -> "SW (Software Fallback, 150% Volume Boost)"
+                            else -> "HW+ (Hardware+ with 150% Volume Boost - Recommended)"
+                        },
+                        onClick = { showDecoderDialog = true }
                     )
                 }
             }
@@ -584,6 +586,84 @@ fun SettingsTab(
             confirmButton = {
                 Button(
                     onClick = { showOrientationDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Video Decoder Selection Dialog (HW, HW+, SW)
+    if (showDecoderDialog) {
+        val decoders = listOf(
+            "HW_PLUS" to ("HW+ (Hardware+ Recommended)" to "Hardware acceleration with 150% volume boost enhancer. Best performance & loud sound."),
+            "HW" to ("HW (Hardware Standard)" to "Standard system hardware decoder. Low power consumption, up to 100% volume."),
+            "SW" to ("SW (Software Fallback)" to "CPU software decoder with 150% volume boost. High compatibility for corrupted/exotic codecs.")
+        )
+        AlertDialog(
+            onDismissRequest = { showDecoderDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Select Video Decoder",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    decoders.forEach { (key, info) ->
+                        val (label, description) = info
+                        val isSelected = (key == prefs.defaultDecoderMode)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.updatePreferences { it.copy(defaultDecoderMode = key) }
+                                    showDecoderDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = label,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = colorScheme.onSurface
+                                )
+                                Text(
+                                    text = description,
+                                    fontSize = 11.sp,
+                                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showDecoderDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
                 ) {
                     Text("Close")

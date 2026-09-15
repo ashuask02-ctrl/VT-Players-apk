@@ -42,52 +42,72 @@ import com.example.ui.theme.VTWhite
 @Composable
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
-    level: Float, // 0.0 .. 1.0
+    level: Float = 1f, // 0.0 .. 1.0
+    volumePercent: Int = 100, // 0 .. 150
     modifier: Modifier = Modifier
 ) {
+    val isBoosted = isVolume && volumePercent > 100
     val icon = if (isVolume) {
         when {
-            level <= 0.01f -> Icons.Filled.VolumeMute
-            level < 0.5f -> Icons.Filled.VolumeDown
+            volumePercent <= 0 -> Icons.Filled.VolumeMute
+            volumePercent <= 50 -> Icons.Filled.VolumeDown
             else -> Icons.Filled.VolumeUp
         }
     } else {
         if (level < 0.5f) Icons.Filled.BrightnessLow else Icons.Filled.BrightnessHigh
     }
 
-    val title = if (isVolume) "Volume" else "Brightness"
-    val percent = (level * 100).toInt().coerceIn(0, 100)
+    val title = if (isVolume) {
+        if (isBoosted) "HW+ Volume Boost" else "Volume"
+    } else "Brightness"
+
+    val displayPercent = if (isVolume) volumePercent.coerceIn(0, 150) else (level * 100).toInt().coerceIn(0, 100)
+    val accentColor = if (isBoosted) Color(0xFFFFB300) else VTWhite
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(VTBlack.copy(alpha = 0.85f))
-            .border(1.5.dp, VTWhite, RoundedCornerShape(16.dp))
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .background(VTBlack.copy(alpha = 0.88f))
+            .border(1.5.dp, if (isBoosted) Color(0xFFFFB300) else VTWhite, RoundedCornerShape(16.dp))
+            .padding(horizontal = 22.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = VTWhite,
+                tint = accentColor,
                 modifier = Modifier.size(36.dp)
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "$percent%",
-                color = VTWhite,
-                fontSize = 18.sp,
+                text = "$displayPercent%",
+                color = accentColor,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.ExtraBold
             )
+            if (isBoosted) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "HW+ BOOST",
+                    color = Color(0xFFFFD54F),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
+            val progressFraction = if (isVolume) {
+                (volumePercent / 150f).coerceIn(0f, 1f)
+            } else {
+                level.coerceIn(0f, 1f)
+            }
             LinearProgressIndicator(
-                progress = { level },
+                progress = { progressFraction },
                 modifier = Modifier
-                    .width(100.dp)
+                    .width(110.dp)
                     .height(6.dp)
                     .clip(CircleShape),
-                color = VTWhite,
+                color = accentColor,
                 trackColor = Color(0xFF333333)
             )
         }
