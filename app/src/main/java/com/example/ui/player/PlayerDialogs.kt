@@ -519,8 +519,6 @@ fun AudioBoostDialog(
     playerState: VTPlayerState,
     onDismiss: () -> Unit
 ) {
-    val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = VTBlack,
@@ -531,7 +529,7 @@ fun AudioBoostDialog(
                 Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (isHwPlus) "HW+ Audio Boost (101% – 120%)" else "Audio Volume (${playerState.decoderMode.code})",
+                    text = "Audio & Boost (${playerState.decoderMode.code})",
                     color = VTWhite,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -576,7 +574,7 @@ fun AudioBoostDialog(
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val presets = if (isHwPlus) listOf(50, 100, 110, 120) else listOf(25, 50, 75, 100)
+                val presets = listOf(50, 100, 110, 120)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -603,37 +601,43 @@ fun AudioBoostDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                if (isHwPlus) {
-                    val boostAmount = (playerState.volumePercent - 100).coerceAtLeast(0)
-                    val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(1, 20)
-                    Text(
-                        text = if (playerState.volumePercent > 100)
-                            "Status: BOOST ACTIVE (+${boostDb} dB via Loudness Enhancer)"
-                        else
-                            "Status: HW+ Standard Volume (Increase above 100% up to 120% for +20 dB boost)",
-                        color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else Color.Gray,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                } else {
-                    Text(
-                        text = "${playerState.decoderMode.code} volume fixed to 0% – 100% (Standard device music volume).",
-                        color = Color.LightGray,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = {
-                            playerManager.setDecoderMode(DecoderMode.HW_PLUS)
-                        },
-                        border = BorderStroke(1.dp, Color(0xFFFFB300)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFD54F)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Switch to HW+ for +100% Audio Boost (101%–120%)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                val boostAmount = (playerState.volumePercent - 100).coerceAtLeast(0)
+                val boostDb = ((boostAmount / 20f) * 20f).toInt().coerceIn(0, 20)
+                Text(
+                    text = if (playerState.volumePercent > 100)
+                        "Status: BOOST ACTIVE (+${boostDb} dB via Loudness Enhancer)"
+                    else
+                        "Status: Standard Device Volume (0%–100%)",
+                    color = if (playerState.volumePercent > 100) Color(0xFFFFD54F) else Color.Gray,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%).",
+                    color = Color.LightGray,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Decoder:", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    DecoderMode.entries.forEach { mode ->
+                        val isCurrent = playerState.decoderMode == mode
+                        FilterChip(
+                            selected = isCurrent,
+                            onClick = { playerManager.setDecoderMode(mode) },
+                            label = { Text(mode.code, fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = VTWhite,
+                                selectedLabelColor = VTBlack,
+                                containerColor = Color(0xFF1E1E1E),
+                                labelColor = VTWhite
+                            )
+                        )
                     }
                 }
             }

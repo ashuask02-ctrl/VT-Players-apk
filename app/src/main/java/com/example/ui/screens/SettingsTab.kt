@@ -241,9 +241,9 @@ fun SettingsTab(
                     SettingsRow(
                         title = "Default Video Decoder",
                         subtitle = when (prefs.defaultDecoderMode) {
-                            "HW" -> "HW (Hardware Standard, 0%–100% Volume)"
-                            "HW_PLUS" -> "HW+ (+100% Audio Boost, 101%–120% up to +20 dB)"
-                            else -> "SW (Software Standard, 0%–100% Volume - First Screen)"
+                            "HW" -> "HW (Hardware Standard, 0%–100% + Audio Boost up to +20 dB)"
+                            "HW_PLUS" -> "HW+ (Hardware+ Accelerated, 0%–100% + Audio Boost up to +20 dB)"
+                            else -> "SW (Software Standard - First Screen, 0%–100% + Audio Boost up to +20 dB)"
                         },
                         onClick = { showDecoderDialog = true }
                     )
@@ -597,9 +597,9 @@ fun SettingsTab(
     // Video Decoder Selection Dialog: Three Decoding Engines (SW, HW, and HW+)
     if (showDecoderDialog) {
         val decoders = listOf(
-            "SW" to ("SW (Software Standard - First Screen)" to "CPU software decoder fixed to 0% – 100% (Standard device music volume). Maximum codec compatibility."),
-            "HW" to ("HW (Hardware Standard)" to "Standard system hardware decoder fixed to 0% – 100% (Standard device music volume). Low power consumption."),
-            "HW_PLUS" to ("HW+ (Hardware+ Audio Boost)" to "Hardware acceleration with 101% – 120% volume: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.")
+            "SW" to ("SW (Software Standard - First Screen)" to "CPU software decoder: 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%)."),
+            "HW" to ("HW (Hardware Standard)" to "Hardware decoder: 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%)."),
+            "HW_PLUS" to ("HW+ (Hardware+ Audio Boost)" to "Hardware acceleration: 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%).")
         )
         AlertDialog(
             onDismissRequest = { showDecoderDialog = false },

@@ -43,8 +43,8 @@ import com.example.ui.theme.VTWhite
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
-    volumePercent: Int = 100, // 0 .. 200
-    maxVolumePercent: Int = 100, // 100 for SW/HW, 200 for HW+
+    volumePercent: Int = 100, // 0 .. 120
+    maxVolumePercent: Int = 120, // 120 for SW, HW, and HW+
     modifier: Modifier = Modifier
 ) {
     val isBoosted = isVolume && volumePercent > 100
@@ -59,7 +59,7 @@ fun VolumeBrightnessHUD(
     }
 
     val title = if (isVolume) {
-        if (isBoosted) "HW+ Audio Boost" else "Volume"
+        if (isBoosted) "Audio Boost (+20dB)" else "Volume"
     } else "Brightness"
 
     val displayPercent = if (isVolume) volumePercent.coerceIn(0, maxVolumePercent) else (level * 100).toInt().coerceIn(0, 100)

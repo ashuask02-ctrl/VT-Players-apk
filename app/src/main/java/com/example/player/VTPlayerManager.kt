@@ -659,14 +659,13 @@ class VTPlayerManager(
     }
 
     fun setVolumeWithBoost(percent: Int) {
-        val isHwPlus = _playerState.value.decoderMode == DecoderMode.HW_PLUS
-        val maxAllowed = if (isHwPlus) 120 else 100
+        val maxAllowed = _playerState.value.decoderMode.maxVolumePercent
         val clampedPercent = percent.coerceIn(0, maxAllowed)
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
 
         if (clampedPercent <= 100) {
-            // SW and HW (and HW+ at <= 100%): Standard device music volume (0% – 100%)
+            // SW and HW: Standard device music volume (0% – 100%)
             val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
                 .coerceIn(0, maxStreamVolume)
             try {
@@ -685,7 +684,7 @@ class VTPlayerManager(
                 )
             }
         } else {
-            // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
+            // SW and HW (and HW+): Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%)
             try {
                 audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
             } catch (_: Exception) {}
@@ -740,13 +739,8 @@ class VTPlayerManager(
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
         
-        // SW and HW volume fixed to 0% – 100% (Standard device music volume).
-        // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.
-        val currentVolume = if (newMode == DecoderMode.HW_PLUS) {
-            _playerState.value.volumePercent.coerceIn(0, 120)
-        } else {
-            _playerState.value.volumePercent.coerceIn(0, 100)
-        }
+        // SW and HW volume fixed to 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.
+        val currentVolume = _playerState.value.volumePercent.coerceIn(0, newMode.maxVolumePercent)
 
         // Switching between HW and HW+ uses the same hardware video codec!
         if ((currentMode == DecoderMode.HW && newMode == DecoderMode.HW_PLUS) ||

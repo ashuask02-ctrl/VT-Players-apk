@@ -443,14 +443,11 @@ fun VideoPlayerScreen(
                                         }
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
-                                            // SW and HW volume fixed to 0% – 100% (Standard device music volume).
-                                            // HW+ volume fixed to 101% – 120%: +100% Audio Boost driven by Loudness Enhancer, providing up to +20 dB amplification.
+                                            // SW and HW volume fixed to 0% – 100% (Standard device music volume) and Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification (101% – 120%).
                                             val dragUpDistance = downOffset.y - currentPos.y
-                                            val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
-                                            val maxAllowed = if (isHwPlus) 120 else 100
-                                            val scaleFactor = if (isHwPlus) 110 else 100
+                                            val maxAllowed = playerState.decoderMode.maxVolumePercent
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            val targetPercent = (initialVolPercent + (fraction * scaleFactor).toInt()).coerceIn(0, maxAllowed)
+                                            val targetPercent = (initialVolPercent + (fraction * 110).toInt()).coerceIn(0, maxAllowed)
                                             playerManager.setVolumeWithBoost(targetPercent)
                                             hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
@@ -667,9 +664,9 @@ fun VideoPlayerScreen(
                     onToggleHardwareDecoding = {
                         val nextMode = playerManager.cycleDecoderMode()
                         val msg = when (nextMode) {
-                            DecoderMode.SW -> "Three Decoding Engines: SW (Software Standard, 0%–100% Volume)"
-                            DecoderMode.HW -> "Three Decoding Engines: HW (Hardware Standard, 0%–100% Volume)"
-                            DecoderMode.HW_PLUS -> "Three Decoding Engines: HW+ (+100% Audio Boost, 101%–120% up to +20 dB)"
+                            DecoderMode.SW -> "Three Decoding Engines: SW (0%–100% Standard, Audio Boost up to +20 dB)"
+                            DecoderMode.HW -> "Three Decoding Engines: HW (0%–100% Standard, Audio Boost up to +20 dB)"
+                            DecoderMode.HW_PLUS -> "Three Decoding Engines: HW+ (0%–100% Standard, Audio Boost up to +20 dB)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },
