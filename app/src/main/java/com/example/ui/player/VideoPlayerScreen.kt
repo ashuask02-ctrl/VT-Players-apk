@@ -182,6 +182,11 @@ fun VideoPlayerScreen(
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
             // Restore normal / portrait orientation on exit so library screens stay upright
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+            // When exiting Player Screen (unless moving into mini player), pause immediately
+            if (!viewModel.isMiniPlayer.value) {
+                playerManager.getExoPlayer()?.pause()
+            }
         }
     }
 

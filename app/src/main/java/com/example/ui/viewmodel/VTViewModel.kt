@@ -328,7 +328,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         playVideo(streamItem, listOf(streamItem))
     }
 
-    fun closePlayer(forcePause: Boolean = false) {
+    fun closePlayer(forcePause: Boolean = true) {
         // Save current playback position
         val state = playerManager.playerState.value
         val current = state.currentVideo
@@ -344,9 +344,8 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        if (forcePause || !state.isBackgroundPlaybackEnabled) {
-            playerManager.getExoPlayer()?.pause()
-        }
+        // Always pause playback immediately when Player Screen is closed / removed
+        playerManager.getExoPlayer()?.pause()
         _isMiniPlayer.value = false
         _activePlayingVideo.value = null
     }

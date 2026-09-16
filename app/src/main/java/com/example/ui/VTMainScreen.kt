@@ -264,7 +264,7 @@ fun VTMainScreen(
                         VideoPlayerScreen(
                             viewModel = viewModel,
                             video = playingVideo,
-                            onBack = { viewModel.minimizeToMiniPlayer() },
+                            onBack = { viewModel.closePlayer() },
                             onMinimize = { viewModel.minimizeToMiniPlayer() }
                         )
                     }
