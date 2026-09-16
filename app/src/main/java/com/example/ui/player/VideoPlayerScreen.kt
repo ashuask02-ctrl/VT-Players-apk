@@ -444,12 +444,12 @@ fun VideoPlayerScreen(
                                         2 -> {
                                             // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
                                             // SW and HW volume fixed to 0% – 100% (Standard device music volume)
-                                            // HW+ volume fixed to 101% – 150%: +100% Audio Boost driven by Loudness Enhancer
+                                            // HW+ volume fixed to 0% – 150%: +100% Audio Boost driven by Loudness Enhancer
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
                                             val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
                                             val targetPercent = if (isHwPlus) {
-                                                (initialVolPercent + (fraction * 50).toInt()).coerceIn(101, 150)
+                                                (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, 150)
                                             } else {
                                                 (initialVolPercent + (fraction * 100).toInt()).coerceIn(0, 100)
                                             }
@@ -671,7 +671,7 @@ fun VideoPlayerScreen(
                         val msg = when (nextMode) {
                             DecoderMode.SW -> "Video Decoder: SW (Software Standard, 0%–100% Volume)"
                             DecoderMode.HW -> "Video Decoder: HW (Hardware Standard, 0%–100% Volume)"
-                            DecoderMode.HW_PLUS -> "Video Decoder: HW+ (Hardware+ Accelerated, 101%–150% +100% Audio Boost up to +20 dB)"
+                            DecoderMode.HW_PLUS -> "Video Decoder: HW+ (Hardware+ Accelerated, 0%–150% +100% Audio Boost up to +20 dB)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },

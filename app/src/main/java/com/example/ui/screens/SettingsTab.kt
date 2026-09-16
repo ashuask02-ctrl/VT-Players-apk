@@ -242,7 +242,7 @@ fun SettingsTab(
                         title = "Default Video Decoder",
                         subtitle = when (prefs.defaultDecoderMode) {
                             "HW" -> "HW (Hardware Standard, 0%–100% Volume)"
-                            "HW_PLUS" -> "HW+ (Audio Boost 101%–150%, up to +20 dB)"
+                            "HW_PLUS" -> "HW+ (Audio Boost 0%–150%, up to +20 dB)"
                             else -> "SW (Software Standard, 0%–100% Volume)"
                         },
                         onClick = { showDecoderDialog = true }
@@ -599,7 +599,7 @@ fun SettingsTab(
         val decoders = listOf(
             "SW" to ("SW (Software Standard)" to "CPU software decoder fixed to 0% – 100% (Standard device music volume). Maximum codec compatibility."),
             "HW" to ("HW (Hardware Standard)" to "Hardware decoder fixed to 0% – 100% (Standard device music volume). Power efficient."),
-            "HW_PLUS" to ("HW+ (Hardware+ Accelerated)" to "Hardware video acceleration with volume fixed to 101% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.")
+            "HW_PLUS" to ("HW+ (Hardware+ Accelerated)" to "Hardware video acceleration with volume fixed to 0% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.")
         )
         AlertDialog(
             onDismissRequest = { showDecoderDialog = false },

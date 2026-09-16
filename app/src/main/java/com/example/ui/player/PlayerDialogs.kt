@@ -576,12 +576,12 @@ fun AudioBoostDialog(
                 Spacer(modifier = Modifier.height(4.dp))
                 if (isHwPlus) {
                     Slider(
-                        value = playerState.volumePercent.toFloat().coerceIn(101f, 150f),
+                        value = playerState.volumePercent.toFloat().coerceIn(0f, 150f),
                         onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
-                        valueRange = 101f..150f,
+                        valueRange = 0f..150f,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFFFFB300),
-                            activeTrackColor = Color(0xFFFFB300),
+                            thumbColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                            activeTrackColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
                             inactiveTrackColor = Color(0xFF333333)
                         )
                     )
@@ -598,7 +598,7 @@ fun AudioBoostDialog(
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                val presets = if (isHwPlus) listOf(110, 125, 140, 150) else listOf(25, 50, 75, 100)
+                val presets = if (isHwPlus) listOf(50, 100, 125, 150) else listOf(25, 50, 75, 100)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -616,7 +616,7 @@ fun AudioBoostDialog(
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = if (isHwPlus) Color(0xFFFFB300) else VTWhite,
+                                selectedContainerColor = if (isHwPlus && preset > 100) Color(0xFFFFB300) else VTWhite,
                                 selectedLabelColor = VTBlack,
                                 containerColor = Color(0xFF1E1E1E),
                                 labelColor = VTWhite
@@ -627,17 +627,21 @@ fun AudioBoostDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (isHwPlus) {
-                        "Status: +100% AUDIO BOOST ACTIVE (+$boostDb dB via Loudness Enhancer)"
+                        if (playerState.volumePercent > 100) {
+                            "Status: +100% AUDIO BOOST ACTIVE (+$boostDb dB via Loudness Enhancer)"
+                        } else {
+                            "Status: Standard Device Volume (0%–100%)"
+                        }
                     } else {
                         "Status: Standard Device Volume (0%–100%)"
                     },
-                    color = if (isHwPlus) Color(0xFFFFB300) else Color.LightGray,
+                    color = if (isHwPlus && playerState.volumePercent > 100) Color(0xFFFFB300) else Color.LightGray,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume).\nHW+ volume fixed to 101% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.",
+                    text = "SW and HW volume fixed to 0% – 100% (Standard device music volume).\nHW+ volume fixed to 0% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification.",
                     color = Color.LightGray,
                     fontSize = 11.sp,
                     lineHeight = 15.sp

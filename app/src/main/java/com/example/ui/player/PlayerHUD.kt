@@ -43,7 +43,7 @@ import com.example.ui.theme.VTWhite
 fun VolumeBrightnessHUD(
     isVolume: Boolean,
     level: Float = 1f, // 0.0 .. 1.0
-    volumePercent: Int = 100, // 0 .. 100 for SW/HW, 101 .. 150 for HW+
+    volumePercent: Int = 100, // 0 .. 100 for SW/HW, 0 .. 150 for HW+
     maxVolumePercent: Int = 100,
     modifier: Modifier = Modifier
 ) {

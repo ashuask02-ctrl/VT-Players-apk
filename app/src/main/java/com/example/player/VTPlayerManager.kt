@@ -656,34 +656,54 @@ class VTPlayerManager(
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
 
         if (currentDecoder == DecoderMode.HW_PLUS) {
-            // HW+ volume fixed to 101% – 150%: +100% Audio Boost driven by the Loudness Enhancer audio effect pipeline, providing up to +20 dB amplification
-            val clampedPercent = percent.coerceIn(101, 150)
+            // HW+ volume fixed to 0% – 150%: 0%–100% standard stream volume, and 101%–150% +100% Audio Boost driven by Loudness Enhancer (up to +20 dB)
+            val clampedPercent = percent.coerceIn(0, 150)
 
-            // Maximize standard stream volume
-            try {
-                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
-            } catch (_: Exception) {}
-
-            // Calculate gain: 101% -> +40 mB, 150% -> +2000 mB (+20 dB amplification)
-            val boostFraction = (clampedPercent - 100) / 50f // 0.02f .. 1.0f
-            val gainMb = (boostFraction * 2000).toInt().coerceIn(0, 2000)
-
-            val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+            if (clampedPercent <= 100) {
+                // Standard volume range (0% - 100%)
+                val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
+                    .coerceIn(0, maxStreamVolume)
                 try {
-                    if (loudnessEnhancer == null) {
-                        loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                    }
-                    loudnessEnhancer?.setTargetGain(gainMb)
-                    loudnessEnhancer?.enabled = true
+                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetStreamVol, 0)
                 } catch (_: Exception) {}
-            }
 
-            _playerState.update {
-                it.copy(
-                    volumePercent = clampedPercent,
-                    isAudioBoostActive = true
-                )
+                try {
+                    loudnessEnhancer?.setTargetGain(0)
+                    loudnessEnhancer?.enabled = false
+                } catch (_: Exception) {}
+
+                _playerState.update {
+                    it.copy(
+                        volumePercent = clampedPercent,
+                        isAudioBoostActive = false
+                    )
+                }
+            } else {
+                // Audio Boost range (101% - 150%): Maximize standard stream volume & drive Loudness Enhancer up to +20 dB (2000 mB)
+                try {
+                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
+                } catch (_: Exception) {}
+
+                val boostFraction = (clampedPercent - 100) / 50f // 0.02f .. 1.0f
+                val gainMb = (boostFraction * 2000).toInt().coerceIn(0, 2000)
+
+                val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+                if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                    try {
+                        if (loudnessEnhancer == null) {
+                            loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                        }
+                        loudnessEnhancer?.setTargetGain(gainMb)
+                        loudnessEnhancer?.enabled = true
+                    } catch (_: Exception) {}
+                }
+
+                _playerState.update {
+                    it.copy(
+                        volumePercent = clampedPercent,
+                        isAudioBoostActive = true
+                    )
+                }
             }
         } else {
             // SW and HW volume fixed to 0% – 100% (Standard device music volume)
@@ -734,11 +754,11 @@ class VTPlayerManager(
                 )
             }
             if (newMode == DecoderMode.HW_PLUS) {
-                // Transition to HW+ audio boost range (101% - 150%)
-                setVolumeWithBoost(115)
+                // Transition to HW+ volume range (0% - 150%)
+                setVolumeWithBoost(_playerState.value.volumePercent.coerceIn(0, 150))
             } else {
-                // Transition to HW standard volume range (0% - 100%)
-                setVolumeWithBoost(100)
+                // Transition to SW/HW standard volume range (0% - 100%)
+                setVolumeWithBoost(_playerState.value.volumePercent.coerceIn(0, 100))
             }
             return
         }
@@ -755,7 +775,7 @@ class VTPlayerManager(
         val currentSpeed = _playerState.value.playbackSpeed
 
         val targetVolume = if (newMode == DecoderMode.HW_PLUS) {
-            115
+            _playerState.value.volumePercent.coerceIn(0, 150)
         } else {
             _playerState.value.volumePercent.coerceIn(0, 100)
         }
