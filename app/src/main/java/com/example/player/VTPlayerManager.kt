@@ -49,6 +49,7 @@ class VTPlayerManager(
     var onPositionSaved: ((uri: String, position: Long, duration: Long) -> Unit)? = null
 
     private var progressJob: Job? = null
+    private var pendingResumePosition: Long = 0L
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -56,6 +57,14 @@ class VTPlayerManager(
             val duration = exoPlayer?.duration?.coerceAtLeast(0L) ?: 0L
             if (playbackState == Player.STATE_READY) {
                 exoPlayer?.currentTracks?.let { updateAvailableTracks(it) }
+                if (pendingResumePosition > 0L) {
+                    val target = pendingResumePosition
+                    pendingResumePosition = 0L
+                    val cur = exoPlayer?.currentPosition ?: 0L
+                    if (kotlin.math.abs(cur - target) > 800L) {
+                        exoPlayer?.seekTo(target)
+                    }
+                }
             }
             _playerState.update {
                 it.copy(
@@ -346,8 +355,12 @@ class VTPlayerManager(
             builder.build()
         }
 
+        pendingResumePosition = resumePosition
         player.setMediaItems(mediaItems, startIndex, resumePosition)
         player.prepare()
+        if (resumePosition > 0L) {
+            player.seekTo(startIndex, resumePosition)
+        }
         player.play()
 
         _playerState.update {
@@ -359,6 +372,8 @@ class VTPlayerManager(
                 isPlaying = true
             )
         }
+
+        startProgressTracking()
     }
 
     fun togglePlayPause() {
@@ -371,6 +386,8 @@ class VTPlayerManager(
     }
 
     fun stop() {
+        progressJob?.cancel()
+        pendingResumePosition = 0L
         val player = exoPlayer ?: return
         player.pause()
         player.stop()

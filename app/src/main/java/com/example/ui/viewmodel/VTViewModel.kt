@@ -81,6 +81,9 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissMiniPlayer() {
+        try {
+            playerManager.getExoPlayer()?.pause()
+        } catch (_: Exception) {}
         closePlayer(forcePause = true)
     }
 
@@ -337,10 +340,16 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     fun closePlayer(forcePause: Boolean = true) {
         // Save current playback position
         val state = playerManager.playerState.value
-        val current = state.currentVideo
+        val current = _activePlayingVideo.value ?: state.currentVideo
         val exo = playerManager.getExoPlayer()
-        val exactPos = exo?.currentPosition?.takeIf { it > 0L } ?: state.currentPosition
-        val exactDur = exo?.duration?.takeIf { it > 0L } ?: state.duration
+        val exactPos = (exo?.currentPosition?.takeIf { it > 0L } ?: state.currentPosition).coerceAtLeast(0L)
+        val exactDur = (exo?.duration?.takeIf { it > 0L } ?: state.duration).coerceAtLeast(0L)
+
+        // Always pause and stop playback immediately when Player Screen or Mini Player is closed
+        try {
+            exo?.pause()
+        } catch (_: Exception) {}
+        playerManager.stop()
 
         if (current != null && exactPos > 0L) {
             _lastStoppedPositions[current.uriString] = exactPos
@@ -355,8 +364,6 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Always pause and stop playback immediately when Player Screen or Mini Player is closed
-        playerManager.stop()
         _isMiniPlayer.value = false
         _activePlayingVideo.value = null
     }

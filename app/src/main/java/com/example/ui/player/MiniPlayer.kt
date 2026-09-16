@@ -137,6 +137,9 @@ fun MiniPlayer(
                         coroutineScope.launch {
                             val target = if (swipeOffsetX.value > 0) parentWidthPx else -parentWidthPx
                             swipeOffsetX.animateTo(target, animationSpec = tween(220))
+                            try {
+                                playerManager.getExoPlayer()?.pause()
+                            } catch (_: Exception) {}
                             onClose()
                         }
                     } else {
@@ -172,13 +175,6 @@ fun MiniPlayer(
                 .clip(RoundedCornerShape(14.dp))
                 .background(VTBlack)
                 .border(1.5.dp, VTAccentBlue, RoundedCornerShape(14.dp))
-                .then(dragModifier)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    onExpand()
-                }
                 .testTag("mini_player_surface")
         ) {
             // Live Video Surface via AndroidView
@@ -205,32 +201,41 @@ fun MiniPlayer(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Transparent Gradient scrim for readability
+            // Transparent Gradient scrim with drag & tap-to-expand
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.65f),
+                                Color.Black.copy(alpha = 0.70f),
                                 Color.Transparent,
                                 Color.Black.copy(alpha = 0.85f)
                             )
                         )
                     )
+                    .then(dragModifier)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        onExpand()
+                    }
             )
 
             // Top bar controls: Expand icon and Close (×) icon
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onExpand,
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.6f))
                         .testTag("mini_player_expand_btn")
                 ) {
                     Icon(
@@ -243,11 +248,19 @@ fun MiniPlayer(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Close (×) button
+                // Close (×) button: pauses playback immediately and closes
                 IconButton(
-                    onClick = onClose,
+                    onClick = {
+                        try {
+                            playerManager.getExoPlayer()?.pause()
+                        } catch (_: Exception) {}
+                        onClose()
+                    },
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .border(1.dp, VTWhite.copy(alpha = 0.5f), CircleShape)
                         .testTag("mini_player_close_btn")
                 ) {
                     Icon(
