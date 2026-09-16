@@ -89,7 +89,14 @@ class VTRepository(
         withContext(Dispatchers.IO) {
             val existing = recordDao.getRecordByUri(uri)
             if (existing != null) {
-                recordDao.updatePlaybackPosition(uri, position, System.currentTimeMillis())
+                val durToSave = if (duration > 0L) duration else existing.duration
+                recordDao.insertOrUpdate(
+                    existing.copy(
+                        lastPosition = position,
+                        lastPlayedTimestamp = System.currentTimeMillis(),
+                        duration = durToSave
+                    )
+                )
             } else {
                 recordDao.insertOrUpdate(
                     PlaybackRecordEntity(

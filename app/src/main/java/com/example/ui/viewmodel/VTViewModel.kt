@@ -61,6 +61,9 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     private val _activePlayingVideo = MutableStateFlow<VideoItem?>(null)
     val activePlayingVideo: StateFlow<VideoItem?> = _activePlayingVideo.asStateFlow()
 
+    // Fast in-memory cache for exact stopped positions to guarantee instantaneous resume
+    private val _lastStoppedPositions = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     // Mini Player Mode
     private val _isMiniPlayer = MutableStateFlow(false)
     val isMiniPlayer: StateFlow<Boolean> = _isMiniPlayer.asStateFlow()
@@ -270,19 +273,21 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
                 playerManager.setDecoderMode(preferredDecoder)
             }
 
+            val inMemoryPos = _lastStoppedPositions[video.uriString]
             val record = repository.getRecordByUri(video.uriString)
-            val savedPos = record?.lastPosition ?: video.lastPosition
+            val savedPos = inMemoryPos ?: record?.lastPosition ?: video.lastPosition
             val totalDur = if ((record?.duration ?: 0L) > 0) record!!.duration else video.duration
             val startIdx = playlist.indexOfFirst { it.uriString == video.uriString }.coerceAtLeast(0)
 
-            // Has user previously watched more than 3 seconds, and not already at the end?
-            val hasResumePoint = savedPos > 3000L && (totalDur <= 0L || savedPos < (totalDur - 5000L))
+            // Has user previously watched more than 1 second, and not already within 3 seconds of end?
+            val hasResumePoint = savedPos > 1000L && (totalDur <= 0L || savedPos < (totalDur - 3000L))
+            val resumePos = if (hasResumePoint) savedPos else 0L
 
             playerManager.playVideo(
                 video = video,
                 playlist = if (playlist.isEmpty()) listOf(video) else playlist,
                 startIndex = startIdx,
-                resumePosition = if (hasResumePoint) savedPos else 0L,
+                resumePosition = resumePos,
                 externalSubtitleUri = externalSubUri
             )
 
@@ -303,6 +308,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearSavedPosition(uri: String) {
+        _lastStoppedPositions.remove(uri)
         viewModelScope.launch(Dispatchers.IO) {
             val existing = repository.getRecordByUri(uri)
             if (existing != null) {
@@ -332,20 +338,25 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         // Save current playback position
         val state = playerManager.playerState.value
         val current = state.currentVideo
-        if (current != null) {
+        val exo = playerManager.getExoPlayer()
+        val exactPos = exo?.currentPosition?.takeIf { it > 0L } ?: state.currentPosition
+        val exactDur = exo?.duration?.takeIf { it > 0L } ?: state.duration
+
+        if (current != null && exactPos > 0L) {
+            _lastStoppedPositions[current.uriString] = exactPos
             viewModelScope.launch(Dispatchers.IO) {
                 repository.recordPlayback(
                     uri = current.uriString,
                     title = current.title,
-                    duration = state.duration,
-                    position = state.currentPosition,
+                    duration = exactDur,
+                    position = exactPos,
                     folderName = current.folderName
                 )
             }
         }
 
-        // Always pause playback immediately when Player Screen is closed / removed
-        playerManager.getExoPlayer()?.pause()
+        // Always pause and stop playback immediately when Player Screen or Mini Player is closed
+        playerManager.stop()
         _isMiniPlayer.value = false
         _activePlayingVideo.value = null
     }

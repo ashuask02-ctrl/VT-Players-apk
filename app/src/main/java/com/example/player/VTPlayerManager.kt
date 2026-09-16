@@ -370,6 +370,13 @@ class VTPlayerManager(
         }
     }
 
+    fun stop() {
+        val player = exoPlayer ?: return
+        player.pause()
+        player.stop()
+        _playerState.update { it.copy(isPlaying = false) }
+    }
+
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs.coerceAtLeast(0L))
         _playerState.update { it.copy(currentPosition = positionMs) }

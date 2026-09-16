@@ -50,6 +50,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FitScreen
@@ -745,128 +746,77 @@ fun VideoPlayerScreen(
         }
     }
 
-    // ▶️ सबसे खास: Resume Dialog
+    // ▶️ Automatic Resume Notification Pill (Video automatically continues uninterrupted from saved position!)
     playerState.resumePrompt?.let { prompt ->
-        AlertDialog(
-            onDismissRequest = { playerManager.clearResumePrompt() },
-            containerColor = Color(0xFF161616),
-            shape = RoundedCornerShape(16.dp),
-            icon = {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(VTAccentBlue.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.History,
-                        contentDescription = null,
-                        tint = VTAccentBlue,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            },
-            title = {
+        LaunchedEffect(prompt) {
+            kotlinx.coroutines.delay(4500)
+            playerManager.clearResumePrompt()
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(bottom = if (playerState.areControlsVisible) 110.dp else 36.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xF0181818))
+                    .border(1.2.dp, VTAccentBlue.copy(alpha = 0.85f), RoundedCornerShape(24.dp))
+                    .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.History,
+                    contentDescription = null,
+                    tint = VTAccentBlue,
+                    modifier = Modifier.size(18.dp)
+                )
                 Text(
-                    text = "Resume Video?",
+                    text = "Resumed from ${formatMs(prompt.savedPositionMs)}",
                     color = VTWhite,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    fontSize = 12.5.sp
                 )
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = prompt.video.title,
-                        color = VTWhite,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 15.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF242424))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Total: ${if (prompt.totalDurationMs > 0) formatMs(prompt.totalDurationMs) else prompt.video.formattedDuration}",
-                            color = Color(0xFFCCCCCC),
-                            fontSize = 12.sp
-                        )
-                        Text(text = " • ", color = Color.Gray, fontSize = 12.sp)
-                        Text(
-                            text = "आपने देखा: ${formatMs(prompt.savedPositionMs)}",
-                            color = VTAccentBlue,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "Resume from ${formatMs(prompt.savedPositionMs)}?",
-                        color = VTWhite,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        playerManager.seekTo(prompt.savedPositionMs)
-                        playerManager.clearResumePrompt()
-                        if (!playerState.isPlaying) {
-                            playerManager.getExoPlayer()?.play()
+                Text(
+                    text = "•",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = "START OVER",
+                    color = VTAccentBlue,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            playerManager.seekTo(0L)
+                            viewModel.clearSavedPosition(prompt.video.uriString)
+                            playerManager.clearResumePrompt()
+                            hudMessage = "Playing from start"
                         }
-                        hudMessage = "Resumed from ${formatMs(prompt.savedPositionMs)}"
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = VTAccentBlue,
-                        contentColor = VTWhite
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.testTag("resume_confirm_button")
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .testTag("resume_start_over_button")
+                )
+                IconButton(
+                    onClick = { playerManager.clearResumePrompt() },
+                    modifier = Modifier
+                        .size(24.dp)
+                        .testTag("resume_confirm_button")
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("RESUME", fontWeight = FontWeight.Black)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = {
-                        playerManager.seekTo(0L)
-                        viewModel.clearSavedPosition(prompt.video.uriString)
-                        playerManager.clearResumePrompt()
-                        if (!playerState.isPlaying) {
-                            playerManager.getExoPlayer()?.play()
-                        }
-                        hudMessage = "Playing from start"
-                    },
-                    border = BorderStroke(1.dp, Color(0xFF555555)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = VTWhite),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.testTag("resume_start_over_button")
-                ) {
-                    Icon(Icons.Filled.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("START OVER", fontWeight = FontWeight.Bold)
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Dismiss",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(15.dp)
+                    )
                 }
             }
-        )
+        }
     }
 
     // Sleep Timer Dialog
