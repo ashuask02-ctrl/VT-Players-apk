@@ -140,7 +140,8 @@ import java.util.Locale
 fun VideoPlayerScreen(
     viewModel: VTViewModel,
     video: VideoItem,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onMinimize: () -> Unit = onBack
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -335,8 +336,8 @@ fun VideoPlayerScreen(
                 playerManager.attachPlayerView(playerView)
                 playerView.resizeMode = resizeMode
             },
-            onRelease = {
-                playerManager.attachPlayerView(null)
+            onRelease = { playerView ->
+                playerManager.detachPlayerView(playerView)
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -664,6 +665,7 @@ fun VideoPlayerScreen(
                     video = video,
                     playerState = playerState,
                     onBack = onBack,
+                    onMinimize = onMinimize,
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
                     onToggleHardwareDecoding = {
@@ -951,6 +953,7 @@ fun PlayerTopBar(
     video: VideoItem,
     playerState: VTPlayerState,
     onBack: () -> Unit,
+    onMinimize: () -> Unit = onBack,
     onAudioTracksClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
     onToggleHardwareDecoding: () -> Unit,
@@ -1139,6 +1142,21 @@ fun PlayerTopBar(
                 )
             }
 
+            // 📺 Mini Player / PiP
+            IconButton(
+                onClick = onMinimize,
+                modifier = Modifier
+                    .size(38.dp)
+                    .testTag("player_pip_button")
+            ) {
+                Icon(
+                    Icons.Filled.PictureInPictureAlt,
+                    contentDescription = "Mini Player (PiP)",
+                    tint = VTWhite,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
             // ⋮ More
             Box {
                 IconButton(
@@ -1159,6 +1177,14 @@ fun PlayerTopBar(
                         .background(VTBlack)
                         .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Mini Player (PiP)", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.PictureInPictureAlt, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onMinimize()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Audio & Boost (${playerState.decoderMode.code})", color = VTWhite, fontWeight = FontWeight.Bold) },
                         leadingIcon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite) },

@@ -3,6 +3,7 @@ package com.example.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.components.VTDrawerContent
+import com.example.ui.player.MiniPlayer
 import com.example.ui.player.VideoPlayerScreen
 import com.example.ui.screens.FolderListTab
 import com.example.ui.screens.PlaylistsTab
@@ -118,12 +120,13 @@ fun VTMainScreen(
         ) {
             val currentTab by viewModel.currentTab.collectAsState()
             val activePlayingVideo by viewModel.activePlayingVideo.collectAsState()
+            val isMiniPlayer by viewModel.isMiniPlayer.collectAsState()
             val colorScheme = MaterialTheme.colorScheme
 
             Box(modifier = modifier.fillMaxSize()) {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
-                    gesturesEnabled = activePlayingVideo == null,
+                    gesturesEnabled = activePlayingVideo == null || isMiniPlayer,
                     drawerContent = {
                         VTDrawerContent(
                             viewModel = viewModel,
@@ -135,7 +138,7 @@ fun VTMainScreen(
                 ) {
                     Scaffold(
                         bottomBar = {
-                            if (activePlayingVideo == null) {
+                            if (activePlayingVideo == null || isMiniPlayer) {
                                 NavigationBar(
                                     containerColor = colorScheme.surface,
                                     contentColor = colorScheme.onSurface,
@@ -250,13 +253,33 @@ fun VTMainScreen(
                     }
                 }
 
-                // Immersive Video Player Overlay
+                // Intercept back button when Mini Player is active to dismiss it
+                BackHandler(enabled = activePlayingVideo != null && isMiniPlayer) {
+                    viewModel.dismissMiniPlayer()
+                }
+
+                // Immersive Video Player Overlay (Full Screen)
                 activePlayingVideo?.let { playingVideo ->
-                    VideoPlayerScreen(
-                        viewModel = viewModel,
-                        video = playingVideo,
-                        onBack = { viewModel.closePlayer() }
-                    )
+                    if (!isMiniPlayer) {
+                        VideoPlayerScreen(
+                            viewModel = viewModel,
+                            video = playingVideo,
+                            onBack = { viewModel.minimizeToMiniPlayer() },
+                            onMinimize = { viewModel.minimizeToMiniPlayer() }
+                        )
+                    }
+                }
+
+                // Floating Draggable Mini Player (Picture-in-Picture)
+                activePlayingVideo?.let { playingVideo ->
+                    if (isMiniPlayer) {
+                        MiniPlayer(
+                            video = playingVideo,
+                            playerManager = viewModel.playerManager,
+                            onExpand = { viewModel.expandToFullScreen() },
+                            onClose = { viewModel.dismissMiniPlayer() }
+                        )
+                    }
                 }
             }
         }

@@ -57,9 +57,29 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentTab = MutableStateFlow(MainTab.VIDEOS)
     val currentTab: StateFlow<MainTab> = _currentTab.asStateFlow()
 
-    // Video playing state - when non-null, Player Screen is displayed
+    // Video playing state - when non-null, Player Screen or Mini Player is active
     private val _activePlayingVideo = MutableStateFlow<VideoItem?>(null)
     val activePlayingVideo: StateFlow<VideoItem?> = _activePlayingVideo.asStateFlow()
+
+    // Mini Player Mode
+    private val _isMiniPlayer = MutableStateFlow(false)
+    val isMiniPlayer: StateFlow<Boolean> = _isMiniPlayer.asStateFlow()
+
+    fun minimizeToMiniPlayer() {
+        if (_activePlayingVideo.value != null) {
+            _isMiniPlayer.value = true
+        }
+    }
+
+    fun expandToFullScreen() {
+        if (_activePlayingVideo.value != null) {
+            _isMiniPlayer.value = false
+        }
+    }
+
+    fun dismissMiniPlayer() {
+        closePlayer(forcePause = true)
+    }
 
     // Search & Sorting
     private val _searchQuery = MutableStateFlow("")
@@ -238,6 +258,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
     // Playback actions
     fun playVideo(video: VideoItem, playlist: List<VideoItem> = listOf(video), externalSubUri: Uri? = null) {
         _activePlayingVideo.value = video
+        _isMiniPlayer.value = false
         viewModelScope.launch {
             val prefs = repository.getPreferences()
             val preferredDecoder = when (prefs.defaultDecoderMode) {
@@ -307,7 +328,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         playVideo(streamItem, listOf(streamItem))
     }
 
-    fun closePlayer() {
+    fun closePlayer(forcePause: Boolean = false) {
         // Save current playback position
         val state = playerManager.playerState.value
         val current = state.currentVideo
@@ -323,9 +344,10 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        if (!state.isBackgroundPlaybackEnabled) {
+        if (forcePause || !state.isBackgroundPlaybackEnabled) {
             playerManager.getExoPlayer()?.pause()
         }
+        _isMiniPlayer.value = false
         _activePlayingVideo.value = null
     }
 

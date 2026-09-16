@@ -192,8 +192,17 @@ class VTPlayerManager(
     private var attachedPlayerView: PlayerView? = null
 
     fun attachPlayerView(view: PlayerView?) {
-        attachedPlayerView = view
-        view?.player = exoPlayer
+        if (view != null) {
+            attachedPlayerView = view
+            view.player = exoPlayer
+        }
+    }
+
+    fun detachPlayerView(view: PlayerView?) {
+        if (view != null && attachedPlayerView == view) {
+            attachedPlayerView = null
+            view.player = null
+        }
     }
 
     fun getExoPlayer(): ExoPlayer? = exoPlayer
