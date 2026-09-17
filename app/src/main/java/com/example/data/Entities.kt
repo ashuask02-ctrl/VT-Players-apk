@@ -62,5 +62,10 @@ data class PlayerPreferencesEntity(
     val fontSize: String = "MEDIUM", // "SMALL", "MEDIUM", "LARGE"
     val hideStatusBarInPlayer: Boolean = true, // Hide mobile signal, battery, and time line in player
     val movieOrientation: String = "HORIZONTAL", // "HORIZONTAL", "VERTICAL", "AUTO"
-    val defaultDecoderMode: String = "SW" // "SW", "HW", "HW_PLUS"
+    val defaultDecoderMode: String = "SW", // "SW", "HW", "HW_PLUS"
+    val defaultAudioDecoderMode: String = "AUTO", // "AUTO", "SW"
+    val audioPassthrough: Boolean = false,
+    val leftRightBalance: Float = 0.0f,
+    val preservePitch: Boolean = true,
+    val defaultEqualizerPreset: String = "FLAT"
 )

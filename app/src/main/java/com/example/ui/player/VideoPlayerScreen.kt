@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -449,17 +450,10 @@ fun VideoPlayerScreen(
                                             hudHideTrigger = 0L
                                         }
                                         2 -> {
-                                            // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
-                                            // SW and HW volume fixed to 0% – 100% (Standard device music volume)
-                                            // HW+ volume fixed to 0% – 150%: +100% Audio Boost driven by Loudness Enhancer
+                                            // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases (0% – 150%)
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
-                                            val targetPercent = if (isHwPlus) {
-                                                (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, 150)
-                                            } else {
-                                                (initialVolPercent + (fraction * 100).toInt()).coerceIn(0, 100)
-                                            }
+                                            val targetPercent = (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, 150)
                                             playerManager.setVolumeWithBoost(targetPercent)
                                             hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
@@ -674,12 +668,24 @@ fun VideoPlayerScreen(
                     onMinimize = onMinimize,
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
+                    onDecoderClick = {
+                        val nextMode = playerManager.cycleDecoderMode()
+                        viewModel.updatePreferences { it.copy(defaultDecoderMode = nextMode.name) }
+                        val msg = when (nextMode) {
+                            DecoderMode.SW -> "Decoder: SW (Software decoding)"
+                            DecoderMode.HW -> "Decoder: HW (Hardware decoding)"
+                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ MediaCodec path)"
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    },
+                    onAudioSettingsClick = { playerManager.setShowAudioSettingsDialog(true) },
                     onToggleHardwareDecoding = {
                         val nextMode = playerManager.cycleDecoderMode()
+                        viewModel.updatePreferences { it.copy(defaultDecoderMode = nextMode.name) }
                         val msg = when (nextMode) {
-                            DecoderMode.SW -> "Video Decoder: SW (Software Standard, 0%–100% Volume)"
-                            DecoderMode.HW -> "Video Decoder: HW (Hardware Standard, 0%–100% Volume)"
-                            DecoderMode.HW_PLUS -> "Video Decoder: HW+ (Hardware+ Accelerated, 0%–150% +100% Audio Boost up to +20 dB)"
+                            DecoderMode.SW -> "Decoder: SW (Software decoding)"
+                            DecoderMode.HW -> "Decoder: HW (Hardware decoding)"
+                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ MediaCodec path)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },
@@ -701,7 +707,7 @@ fun VideoPlayerScreen(
                         }
                     },
                     onSyncClick = { showSyncDialog = true },
-                    onEqualizerClick = { playerManager.setShowEqualizerDialog(true) },
+                    onEqualizerClick = { playerManager.setShowAudioSettingsDialog(true) },
                     onFrameStepperClick = { showFrameStepper = true },
                     onSleepTimerClick = { showSleepTimerDialog = true },
                     modifier = Modifier.align(Alignment.TopCenter)
@@ -860,8 +866,18 @@ fun VideoPlayerScreen(
     if (playerState.showSpeedDialog) {
         SpeedDialog(
             currentSpeed = playerState.playbackSpeed,
+            preservePitch = playerState.preservePitch,
             onSpeedSelected = { playerManager.setPlaybackSpeed(it) },
+            onPreservePitchChanged = { playerManager.setPreservePitch(it) },
             onDismiss = { playerManager.setShowSpeedDialog(false) }
+        )
+    }
+
+    if (playerState.showAudioSettingsDialog) {
+        AudioSettingsDialog(
+            playerManager = playerManager,
+            playerState = playerState,
+            onDismiss = { playerManager.setShowAudioSettingsDialog(false) }
         )
     }
 
@@ -879,7 +895,7 @@ fun VideoPlayerScreen(
     }
 
     if (playerState.showEqualizerDialog) {
-        AudioBoostDialog(
+        AudioSettingsDialog(
             playerManager = playerManager,
             playerState = playerState,
             onDismiss = { playerManager.setShowEqualizerDialog(false) }
@@ -911,7 +927,9 @@ fun PlayerTopBar(
     onMinimize: () -> Unit = onBack,
     onAudioTracksClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
-    onToggleHardwareDecoding: () -> Unit,
+    onDecoderClick: () -> Unit = {},
+    onAudioSettingsClick: () -> Unit = {},
+    onToggleHardwareDecoding: () -> Unit = onDecoderClick,
     onSpeedClick: () -> Unit,
     onScreenshotClick: () -> Unit,
     onAudioModeClick: () -> Unit,
@@ -1027,7 +1045,7 @@ fun PlayerTopBar(
                     .clip(RoundedCornerShape(6.dp))
                     .background(badgeBgColor)
                     .border(1.dp, badgeBorderColor, RoundedCornerShape(6.dp))
-                    .clickable(onClick = onToggleHardwareDecoding)
+                    .clickable(onClick = onDecoderClick)
                     .padding(horizontal = 7.dp, vertical = 3.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1133,19 +1151,35 @@ fun PlayerTopBar(
                         .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Mini Player (PiP)", color = VTWhite, fontWeight = FontWeight.Bold) },
-                        leadingIcon = { Icon(Icons.Filled.PictureInPictureAlt, contentDescription = null, tint = VTWhite) },
+                        text = {
+                            Column {
+                                Text("Decoder: ${playerState.decoderMode.code}", color = VTWhite, fontWeight = FontWeight.Bold)
+                                Text("Touch to switch: SW → HW → HW+", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        },
+                        leadingIcon = { Icon(Icons.Filled.Memory, contentDescription = null, tint = VTWhite) },
                         onClick = {
                             showMenu = false
-                            onMinimize()
+                            onToggleHardwareDecoding()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Audio & Boost (${playerState.decoderMode.code})", color = VTWhite, fontWeight = FontWeight.Bold) },
-                        leadingIcon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = VTWhite) },
+                        text = {
+                            Column {
+                                Text("Audio Settings", color = VTWhite, fontWeight = FontWeight.Bold)
+                                Text("Track / Decoder / Volume / Delay / EQ", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.GraphicEq,
+                                contentDescription = null,
+                                tint = if (playerState.isAudioBoostActive) Color(0xFFFFB300) else VTWhite
+                            )
+                        },
                         onClick = {
                             showMenu = false
-                            onEqualizerClick()
+                            onAudioSettingsClick()
                         }
                     )
                     DropdownMenuItem(
@@ -1154,6 +1188,14 @@ fun PlayerTopBar(
                         onClick = {
                             showMenu = false
                             onSyncClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Mini Player (PiP)", color = VTWhite, fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Filled.PictureInPictureAlt, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onMinimize()
                         }
                     )
                     DropdownMenuItem(

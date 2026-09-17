@@ -1,7 +1,9 @@
 package com.example.player
 
 import com.example.model.AspectRatioMode
+import com.example.model.AudioDecoderMode
 import com.example.model.DecoderMode
+import com.example.model.EqualizerPreset
 import com.example.model.TrackItem
 import com.example.model.VideoItem
 
@@ -38,10 +40,17 @@ data class VTPlayerState(
     // Delay offsets
     val subtitleDelayMs: Long = 0L,
     val audioDelayMs: Long = 0L,
-    // Audio boost / Equalizer
+    // Audio boost / Equalizer / Pipeline
     val isAudioBoostActive: Boolean = false,
-    val volumePercent: Int = 100, // Fixed 0%–100% in SW and HW (Standard device music volume); 0%–150% (+100% Audio Boost) in HW+
+    val volumePercent: Int = 100, // 0%–100% normal; up to 200% with LoudnessEnhancer volume boost
     val decoderMode: DecoderMode = DecoderMode.SW,
+    val audioDecoderMode: AudioDecoderMode = AudioDecoderMode.AUTO,
+    val audioPassthroughEnabled: Boolean = false,
+    val leftRightBalance: Float = 0.0f, // -1.0f (Left) to +1.0f (Right), 0.0f = Center
+    val equalizerPreset: EqualizerPreset = EqualizerPreset.FLAT,
+    val equalizerBands: List<Int> = listOf(0, 0, 0, 0, 0), // 60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz
+    val preservePitch: Boolean = true,
+    val audioPitch: Float = 1.0f,
     val hardwareDecoding: Boolean = false,
     val playerSessionId: Long = 0L,
     // Dialog overlays
@@ -49,6 +58,8 @@ data class VTPlayerState(
     val showTracksDialog: Boolean = false,
     val showSubtitleStyleDialog: Boolean = false,
     val showEqualizerDialog: Boolean = false,
+    val showDecoderDialog: Boolean = false,
+    val showAudioSettingsDialog: Boolean = false,
     val showMoreMenu: Boolean = false,
     val resumePrompt: ResumePromptData? = null
 ) {

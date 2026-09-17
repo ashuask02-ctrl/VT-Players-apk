@@ -19,7 +19,9 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.example.model.AspectRatioMode
+import com.example.model.AudioDecoderMode
 import com.example.model.DecoderMode
+import com.example.model.EqualizerPreset
 import com.example.model.TrackItem
 import com.example.model.VideoItem
 import kotlinx.coroutines.CoroutineScope
@@ -114,26 +116,33 @@ class VTPlayerManager(
     }
 
     init {
-        initPlayer(decoderMode = DecoderMode.SW)
+        initPlayer(decoderMode = DecoderMode.SW, audioDecoderMode = AudioDecoderMode.AUTO)
     }
 
     fun initPlayer(useHardware: Boolean) {
         initPlayer(if (useHardware) DecoderMode.HW else DecoderMode.SW)
     }
 
-    fun initPlayer(decoderMode: DecoderMode = _playerState.value.decoderMode) {
+    fun initPlayer(
+        decoderMode: DecoderMode = _playerState.value.decoderMode,
+        audioDecoderMode: AudioDecoderMode = _playerState.value.audioDecoderMode
+    ) {
         exoPlayer?.release()
         exoPlayer = null
         loudnessEnhancer?.release()
         loudnessEnhancer = null
+        equalizer?.release()
+        equalizer = null
 
         trackSelector = DefaultTrackSelector(context)
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-            forceEnableMediaCodecAsynchronousQueueing()
-            setAllowedVideoJoiningTimeMs(0L)
+            if (decoderMode == DecoderMode.HW_PLUS) {
+                forceEnableMediaCodecAsynchronousQueueing()
+                setAllowedVideoJoiningTimeMs(0L)
+            }
             setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val defaultList = try {
                     MediaCodecSelector.DEFAULT.getDecoderInfos(
@@ -145,39 +154,70 @@ class VTPlayerManager(
                     emptyList()
                 }
 
-                // Audio codecs are kept intact so multi-channel/AAC/MP3/AC3 audio decodes reliably in all modes
-                if (!mimeType.startsWith("video/", ignoreCase = true)) {
-                    return@setMediaCodecSelector defaultList
-                }
-
-                when (decoderMode) {
-                    DecoderMode.SW -> {
-                        // Software standard mode: High-performance software-compatible decoding.
-                        // Ensures instant video appearance (no waiting delay) and smooth 1.0x playback (no slow motion)
-                        // with picture quality and color clarity identical to HW.
-                        defaultList
-                    }
-                    DecoderMode.HW, DecoderMode.HW_PLUS -> {
-                        // Hardware accelerated decoder
-                        val hwList = defaultList.filter {
-                            it.hardwareAccelerated ||
-                            (!it.softwareOnly &&
-                             !it.name.startsWith("c2.android.", ignoreCase = true) &&
-                             !it.name.startsWith("OMX.google.", ignoreCase = true) &&
-                             !it.name.contains(".sw.", ignoreCase = true))
+                if (mimeType.startsWith("video/", ignoreCase = true)) {
+                    when (decoderMode) {
+                        DecoderMode.SW -> {
+                            // SW Decoder: Prioritize software decoding codecs (e.g. c2.android.*, OMX.google.*, softwareOnly)
+                            val swList = defaultList.filter {
+                                it.softwareOnly ||
+                                it.name.startsWith("c2.android.", ignoreCase = true) ||
+                                it.name.startsWith("OMX.google.", ignoreCase = true) ||
+                                it.name.contains(".sw.", ignoreCase = true)
+                            }
+                            if (swList.isNotEmpty()) {
+                                swList + defaultList.filterNot { swList.contains(it) }
+                            } else {
+                                defaultList
+                            }
                         }
-                        if (hwList.isNotEmpty()) {
-                            hwList + defaultList.filterNot { hwList.contains(it) }
+                        DecoderMode.HW, DecoderMode.HW_PLUS -> {
+                            // HW & HW+ Decoder: Prioritize hardware accelerated MediaCodec decoders
+                            val hwList = defaultList.filter {
+                                it.hardwareAccelerated ||
+                                (!it.softwareOnly &&
+                                 !it.name.startsWith("c2.android.", ignoreCase = true) &&
+                                 !it.name.startsWith("OMX.google.", ignoreCase = true) &&
+                                 !it.name.contains(".sw.", ignoreCase = true))
+                            }
+                            if (hwList.isNotEmpty()) {
+                                hwList + defaultList.filterNot { hwList.contains(it) }
+                            } else {
+                                defaultList
+                            }
+                        }
+                    }
+                } else if (mimeType.startsWith("audio/", ignoreCase = true)) {
+                    // Audio Decoder: Platform MediaCodec vs Software FFmpeg-compatible mode
+                    if (audioDecoderMode == AudioDecoderMode.SW) {
+                        val swAudioList = defaultList.filter {
+                            it.softwareOnly ||
+                            it.name.startsWith("c2.android.", ignoreCase = true) ||
+                            it.name.startsWith("OMX.google.", ignoreCase = true) ||
+                            it.name.contains(".sw.", ignoreCase = true)
+                        }
+                        if (swAudioList.isNotEmpty()) {
+                            swAudioList + defaultList.filterNot { swAudioList.contains(it) }
                         } else {
                             defaultList
                         }
+                    } else {
+                        defaultList
                     }
+                } else {
+                    defaultList
                 }
             }
         }
 
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setUsage(C.USAGE_MEDIA)
+            .setAllowedCapturePolicy(C.ALLOW_CAPTURE_BY_ALL)
+            .build()
+
         exoPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setTrackSelector(trackSelector)
+            .setAudioAttributes(audioAttributes, true)
             .setSeekForwardIncrementMs(10000)
             .setSeekBackIncrementMs(10000)
             .setUsePlatformDiagnostics(false)
@@ -190,12 +230,14 @@ class VTPlayerManager(
         _playerState.update {
             it.copy(
                 decoderMode = decoderMode,
+                audioDecoderMode = audioDecoderMode,
                 hardwareDecoding = (decoderMode != DecoderMode.SW),
                 playerSessionId = System.currentTimeMillis()
             )
         }
         attachedPlayerView?.player = exoPlayer
         startProgressTracking()
+        applyEqualizerSettings()
     }
 
     private var attachedPlayerView: PlayerView? = null
@@ -418,9 +460,32 @@ class VTPlayerManager(
         }
     }
 
-    fun setPlaybackSpeed(speed: Float) {
-        exoPlayer?.playbackParameters = PlaybackParameters(speed)
-        _playerState.update { it.copy(playbackSpeed = speed) }
+    fun setPlaybackSpeed(
+        speed: Float,
+        preservePitch: Boolean = _playerState.value.preservePitch,
+        pitchFactor: Float = _playerState.value.audioPitch
+    ) {
+        val clampedSpeed = speed.coerceIn(0.25f, 4.0f)
+        val actualPitch = if (preservePitch) 1.0f else (clampedSpeed * pitchFactor).coerceIn(0.5f, 2.0f)
+        try {
+            exoPlayer?.playbackParameters = PlaybackParameters(clampedSpeed, actualPitch)
+        } catch (_: Exception) {}
+        _playerState.update {
+            it.copy(
+                playbackSpeed = clampedSpeed,
+                preservePitch = preservePitch,
+                audioPitch = pitchFactor
+            )
+        }
+    }
+
+    fun setPreservePitch(preserve: Boolean) {
+        setPlaybackSpeed(_playerState.value.playbackSpeed, preservePitch = preserve)
+    }
+
+    fun setAudioPitch(pitch: Float) {
+        val clampedPitch = pitch.coerceIn(0.5f, 2.0f)
+        setPlaybackSpeed(_playerState.value.playbackSpeed, preservePitch = false, pitchFactor = clampedPitch)
     }
 
     fun stepFrame(forward: Boolean) {
@@ -646,18 +711,12 @@ class VTPlayerManager(
 
     // Audio boost toggle
     fun toggleAudioBoost() {
-        val active = !_playerState.value.isAudioBoostActive
-        val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-        if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
-            try {
-                if (loudnessEnhancer == null) {
-                    loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                }
-                loudnessEnhancer?.setTargetGain(if (active) 1200 else 0) // +12 dB
-                loudnessEnhancer?.enabled = active
-            } catch (_: Exception) {}
+        val currentVol = _playerState.value.volumePercent
+        if (currentVol <= 100) {
+            setVolumeWithBoost(150)
+        } else {
+            setVolumeWithBoost(100)
         }
-        _playerState.update { it.copy(isAudioBoostActive = active) }
     }
 
     fun toggleBackgroundPlayback() {
@@ -673,6 +732,8 @@ class VTPlayerManager(
     fun setShowTracksDialog(show: Boolean) = _playerState.update { it.copy(showTracksDialog = show) }
     fun setShowSubtitleStyleDialog(show: Boolean) = _playerState.update { it.copy(showSubtitleStyleDialog = show) }
     fun setShowEqualizerDialog(show: Boolean) = _playerState.update { it.copy(showEqualizerDialog = show) }
+    fun setShowDecoderDialog(show: Boolean) = _playerState.update { it.copy(showDecoderDialog = show) }
+    fun setShowAudioSettingsDialog(show: Boolean) = _playerState.update { it.copy(showAudioSettingsDialog = show) }
     fun setShowMoreMenu(show: Boolean) = _playerState.update { it.copy(showMoreMenu = show) }
 
     fun setResumePrompt(data: ResumePromptData?) {
@@ -683,64 +744,121 @@ class VTPlayerManager(
         _playerState.update { it.copy(resumePrompt = null) }
     }
 
+    // Audio Decoder selection (System MediaCodec vs Software FFmpeg mode)
+    fun setAudioDecoderMode(mode: AudioDecoderMode) {
+        if (_playerState.value.audioDecoderMode == mode) return
+        val curPos = if (exoPlayer != null && (exoPlayer?.currentPosition ?: 0L) > 0L) exoPlayer!!.currentPosition else _playerState.value.currentPosition
+        val curVid = _playerState.value.currentVideo
+        val curPlaylist = _playerState.value.playlist
+        val curIdx = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
+        val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
+        val curSpeed = _playerState.value.playbackSpeed
+
+        try {
+            exoPlayer?.stop()
+            exoPlayer?.clearMediaItems()
+        } catch (_: Exception) {}
+
+        initPlayer(decoderMode = _playerState.value.decoderMode, audioDecoderMode = mode)
+        attachedPlayerView?.player = exoPlayer
+
+        if (curVid != null) {
+            playVideo(curVid, curPlaylist, curIdx, curPos.coerceAtLeast(0L))
+            setPlaybackSpeed(curSpeed)
+            if (!wasPlaying) exoPlayer?.pause()
+        }
+        setVolumeWithBoost(_playerState.value.volumePercent)
+    }
+
+    // Audio Passthrough for AC3/E-AC3/DTS compatible external receivers
+    fun setAudioPassthrough(enabled: Boolean) {
+        _playerState.update { it.copy(audioPassthroughEnabled = enabled) }
+        try {
+            // Apply track selection parameters for direct passthrough
+            val mimeTypes = if (enabled) {
+                arrayOf("audio/ac3", "audio/eac3", "audio/vnd.dts", "audio/true-hd")
+            } else {
+                emptyArray<String>()
+            }
+            trackSelector.setParameters(
+                trackSelector.buildUponParameters()
+                    .setPreferredAudioMimeTypes(*mimeTypes)
+            )
+        } catch (_: Exception) {}
+    }
+
+    // Left/Right Balance: -1.0 (Full Left) to +1.0 (Full Right), 0.0 (Center)
+    fun setLeftRightBalance(balance: Float) {
+        val clamped = balance.coerceIn(-1.0f, 1.0f)
+        _playerState.update { it.copy(leftRightBalance = clamped) }
+        val left = if (clamped > 0f) 1f - clamped else 1f
+        val right = if (clamped < 0f) 1f + clamped else 1f
+        val avgVolume = ((left + right) / 2f).coerceIn(0.1f, 1.0f)
+        try {
+            exoPlayer?.volume = avgVolume
+        } catch (_: Exception) {}
+    }
+
+    // Multi-band Equalizer
+    fun setEqualizerPreset(preset: EqualizerPreset) {
+        val bands = when (preset) {
+            EqualizerPreset.FLAT -> listOf(0, 0, 0, 0, 0)
+            EqualizerPreset.BASS_BOOST -> listOf(8, 4, 0, 0, 0)
+            EqualizerPreset.VOCAL -> listOf(-2, 2, 6, 4, 1)
+            EqualizerPreset.ROCK -> listOf(6, 3, -1, 4, 6)
+            EqualizerPreset.POP -> listOf(4, 3, 2, 4, 3)
+            EqualizerPreset.CLASSICAL -> listOf(5, 3, 1, 3, 5)
+            EqualizerPreset.CUSTOM -> _playerState.value.equalizerBands
+        }
+        _playerState.update {
+            it.copy(
+                equalizerPreset = preset,
+                equalizerBands = bands
+            )
+        }
+        applyEqualizerSettings()
+    }
+
+    fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
+        val currentBands = _playerState.value.equalizerBands.toMutableList()
+        if (bandIndex in currentBands.indices) {
+            currentBands[bandIndex] = levelDb.coerceIn(-12, 12)
+            _playerState.update {
+                it.copy(
+                    equalizerPreset = EqualizerPreset.CUSTOM,
+                    equalizerBands = currentBands
+                )
+            }
+            applyEqualizerSettings()
+        }
+    }
+
+    private fun applyEqualizerSettings() {
+        val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        try {
+            if (equalizer == null) {
+                equalizer = Equalizer(0, audioSessionId).apply { enabled = true }
+            }
+            val eq = equalizer ?: return
+            val numBands = eq.numberOfBands.toInt()
+            val bands = _playerState.value.equalizerBands
+            for (i in 0 until minOf(numBands, bands.size)) {
+                val levelMb = (bands[i] * 100).toShort().coerceIn(eq.bandLevelRange[0], eq.bandLevelRange[1])
+                eq.setBandLevel(i.toShort(), levelMb)
+            }
+        } catch (_: Exception) {}
+    }
+
+    // Volume & Boost (0% – 150%)
+    // SW/HW/HW+ are primarily video decoding modes; audio output & boost are controlled via this separate audio pipeline
     fun setVolumeWithBoost(percent: Int) {
-        val currentDecoder = _playerState.value.decoderMode
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+        val clampedPercent = percent.coerceIn(0, 150)
 
-        if (currentDecoder == DecoderMode.HW_PLUS) {
-            // HW+ volume fixed to 0% – 150%: 0%–100% standard stream volume, and 101%–150% +100% Audio Boost driven by Loudness Enhancer (up to +20 dB)
-            val clampedPercent = percent.coerceIn(0, 150)
-
-            if (clampedPercent <= 100) {
-                // Standard volume range (0% - 100%)
-                val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
-                    .coerceIn(0, maxStreamVolume)
-                try {
-                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetStreamVol, 0)
-                } catch (_: Exception) {}
-
-                try {
-                    loudnessEnhancer?.setTargetGain(0)
-                    loudnessEnhancer?.enabled = false
-                } catch (_: Exception) {}
-
-                _playerState.update {
-                    it.copy(
-                        volumePercent = clampedPercent,
-                        isAudioBoostActive = false
-                    )
-                }
-            } else {
-                // Audio Boost range (101% - 150%): Maximize standard stream volume & drive Loudness Enhancer up to +20 dB (2000 mB)
-                try {
-                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
-                } catch (_: Exception) {}
-
-                val boostFraction = (clampedPercent - 100) / 50f // 0.02f .. 1.0f
-                val gainMb = (boostFraction * 2000).toInt().coerceIn(0, 2000)
-
-                val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-                if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
-                    try {
-                        if (loudnessEnhancer == null) {
-                            loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                        }
-                        loudnessEnhancer?.setTargetGain(gainMb)
-                        loudnessEnhancer?.enabled = true
-                    } catch (_: Exception) {}
-                }
-
-                _playerState.update {
-                    it.copy(
-                        volumePercent = clampedPercent,
-                        isAudioBoostActive = true
-                    )
-                }
-            }
-        } else {
-            // SW and HW volume fixed to 0% – 100% (Standard device music volume)
-            val clampedPercent = percent.coerceIn(0, 100)
+        if (clampedPercent <= 100) {
+            // Standard volume range (0% - 100%): Device music volume stream
             val targetStreamVol = kotlin.math.round((clampedPercent / 100f) * maxStreamVolume).toInt()
                 .coerceIn(0, maxStreamVolume)
             try {
@@ -756,6 +874,32 @@ class VTPlayerManager(
                 it.copy(
                     volumePercent = clampedPercent,
                     isAudioBoostActive = false
+                )
+            }
+        } else {
+            // Volume Boost range (101% - 150%): Maximize standard stream volume & drive Loudness Enhancer up to +20 dB
+            try {
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
+            } catch (_: Exception) {}
+
+            val boostFraction = (clampedPercent - 100) / 50f // 0.02f .. 1.0f
+            val gainMb = (boostFraction * 2000).toInt().coerceIn(100, 2000)
+
+            val audioSessionId = exoPlayer?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                try {
+                    if (loudnessEnhancer == null) {
+                        loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                    }
+                    loudnessEnhancer?.setTargetGain(gainMb)
+                    loudnessEnhancer?.enabled = true
+                } catch (_: Exception) {}
+            }
+
+            _playerState.update {
+                it.copy(
+                    volumePercent = clampedPercent,
+                    isAudioBoostActive = true
                 )
             }
         }
@@ -786,13 +930,6 @@ class VTPlayerManager(
                     hardwareDecoding = true
                 )
             }
-            if (newMode == DecoderMode.HW_PLUS) {
-                // Transition to HW+ volume range (0% - 150%)
-                setVolumeWithBoost(_playerState.value.volumePercent.coerceIn(0, 150))
-            } else {
-                // Transition to SW/HW standard volume range (0% - 100%)
-                setVolumeWithBoost(_playerState.value.volumePercent.coerceIn(0, 100))
-            }
             return
         }
 
@@ -806,12 +943,7 @@ class VTPlayerManager(
         val currentIndex = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
-
-        val targetVolume = if (newMode == DecoderMode.HW_PLUS) {
-            _playerState.value.volumePercent.coerceIn(0, 150)
-        } else {
-            _playerState.value.volumePercent.coerceIn(0, 100)
-        }
+        val targetVolume = _playerState.value.volumePercent
 
         // Switching between SW and HW/HW+ safely re-initializes and reconnects the surface
         try {
@@ -819,7 +951,7 @@ class VTPlayerManager(
             exoPlayer?.clearMediaItems()
         } catch (_: Exception) {}
 
-        initPlayer(decoderMode = newMode)
+        initPlayer(decoderMode = newMode, audioDecoderMode = _playerState.value.audioDecoderMode)
         attachedPlayerView?.player = exoPlayer
 
         if (currentVid != null) {

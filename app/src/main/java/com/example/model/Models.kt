@@ -54,10 +54,40 @@ enum class AspectRatioMode(val label: String) {
     RATIO_1_1("1:1 Square")
 }
 
-enum class DecoderMode(val code: String, val label: String, val minVolumePercent: Int, val maxVolumePercent: Int) {
-    SW("SW", "SW Software Decoder (0%–100% Volume)", 0, 100),
-    HW("HW", "HW Hardware Decoder (0%–100% Volume)", 0, 100),
-    HW_PLUS("HW+", "HW+ Hardware+ (+100% Audio Boost, 0%–150%)", 0, 150)
+enum class DecoderMode(
+    val code: String,
+    val label: String,
+    val description: String,
+    val minVolumePercent: Int = 0,
+    val maxVolumePercent: Int = 100
+) {
+    SW("SW", "SW Decoder", "Software decoding", 0, 100),
+    HW("HW", "HW Decoder", "Hardware decoding", 0, 100),
+    HW_PLUS("HW+", "HW+ Decoder", "Hardware decoder + अतिरिक्त hardware/MediaCodec path", 0, 150)
+}
+
+enum class AudioDecoderMode(
+    val code: String,
+    val label: String,
+    val description: String
+) {
+    AUTO("Auto", "System MediaCodec (Auto)", "Hardware audio decoder with platform DSP acceleration"),
+    SW("SW", "Software (FFmpeg Mode)", "Software audio decoder for AC3/DTS/AAC/FLAC maximum compatibility")
+}
+
+enum class EqualizerPreset(
+    val displayName: String,
+    val bassBoostDb: Int,
+    val midDb: Int,
+    val trebleDb: Int
+) {
+    FLAT("Flat", 0, 0, 0),
+    BASS_BOOST("Bass Boost", 8, 2, 0),
+    VOCAL("Vocal", -2, 6, 2),
+    ROCK("Rock", 6, -1, 5),
+    POP("Pop", 4, 3, 2),
+    CLASSICAL("Classical", 5, 2, 4),
+    CUSTOM("Custom", 0, 0, 0)
 }
 
 data class TrackItem(
