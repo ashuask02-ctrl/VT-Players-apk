@@ -102,6 +102,23 @@ fun VideoItemCard(
                         tint = colorScheme.onPrimary,
                         modifier = Modifier.size(32.dp)
                     )
+
+                    // Down-left side overlay symbol ▶ on thumbnail
+                    if (video.hasResumeProgress) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .background(VTBlack.copy(alpha = 0.8f), RoundedCornerShape(topEnd = 4.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "▶",
+                                color = VTWhite,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -220,14 +237,64 @@ fun VideoItemCard(
                 }
             }
 
+            // Down side of video item: show symbol ▶ on the down-left side
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Down side Left side: Show symbol ▶
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            if (video.hasResumeProgress) colorScheme.primary.copy(alpha = 0.15f)
+                            else colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                        .border(
+                            1.dp,
+                            if (video.hasResumeProgress) colorScheme.primary else colorScheme.outline.copy(alpha = 0.4f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "▶",
+                        color = if (video.hasResumeProgress) colorScheme.primary else colorScheme.onSurface,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (video.hasResumeProgress) "Resume ${video.formattedLastPosition}" else "Play",
+                        color = if (video.hasResumeProgress) colorScheme.primary else colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.5.sp
+                    )
+                }
+
+                if (video.hasResumeProgress && video.duration > 0) {
+                    val progressPercent = ((video.lastPosition.toFloat() / video.duration.toFloat()) * 100).toInt().coerceIn(1, 99)
+                    Text(
+                        text = "$progressPercent% watched",
+                        color = colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
             // Progress bar if video has resume position
-            if (video.lastPosition > 0 && video.duration > 0) {
+            if (video.hasResumeProgress && video.duration > 0) {
                 val progress = (video.lastPosition.toFloat() / video.duration.toFloat()).coerceIn(0f, 1f)
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp),
+                        .height(3.5.dp),
                     color = colorScheme.primary,
                     trackColor = colorScheme.outlineVariant
                 )

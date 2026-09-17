@@ -84,6 +84,17 @@ class VTPlayerManager(
             updateAvailableTracks(tracks)
         }
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                lastUserSeekTimestamp = 0L
+                _playerState.update { it.copy(currentPosition = newPosition.positionMs) }
+            }
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val idx = exoPlayer?.currentMediaItemIndex ?: 0
             val state = _playerState.value
@@ -139,9 +150,10 @@ class VTPlayerManager(
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            // Zero joining time eliminates the 5-second video start delay in all modes (especially SW)
+            setAllowedVideoJoiningTimeMs(0L)
             if (decoderMode == DecoderMode.HW_PLUS) {
                 forceEnableMediaCodecAsynchronousQueueing()
-                setAllowedVideoJoiningTimeMs(0L)
             }
             setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val defaultList = try {
@@ -215,8 +227,20 @@ class VTPlayerManager(
             .setAllowedCapturePolicy(C.ALLOW_CAPTURE_BY_ALL)
             .build()
 
+        // Responsive load control: start playback after 250ms buffering rather than waiting 2500ms
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1500,
+                /* maxBufferMs = */ 20000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         exoPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setTrackSelector(trackSelector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)
             .setSeekForwardIncrementMs(10000)
             .setSeekBackIncrementMs(10000)
@@ -224,6 +248,7 @@ class VTPlayerManager(
             .build()
             .apply {
                 playWhenReady = true
+                setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
                 addListener(playerListener)
             }
 
@@ -325,15 +350,25 @@ class VTPlayerManager(
         }
     }
 
+    private var lastUserSeekTimestamp: Long = 0L
+
     private fun startProgressTracking() {
         progressJob?.cancel()
         progressJob = coroutineScope.launch(Dispatchers.Main) {
             var saveCounter = 0
             while (isActive) {
                 exoPlayer?.let { player ->
-                    val pos = player.currentPosition.coerceAtLeast(0L)
                     val dur = player.duration.coerceAtLeast(0L)
                     val state = _playerState.value
+
+                    // Prevent temporary stale pre-seek position during buffering from reverting UI
+                    val isSeekingGracePeriod = (System.currentTimeMillis() - lastUserSeekTimestamp) < 600L &&
+                            (player.playbackState == Player.STATE_BUFFERING || player.isLoading)
+                    val pos = if (isSeekingGracePeriod) {
+                        state.currentPosition
+                    } else {
+                        player.currentPosition.coerceAtLeast(0L)
+                    }
 
                     // Check A-B repeat
                     if (state.isAbRepeatActive && state.repeatPointA != null && state.repeatPointB != null) {
@@ -398,11 +433,9 @@ class VTPlayerManager(
         }
 
         pendingResumePosition = resumePosition
+        // setMediaItems already starts at startIndex and resumePosition; no duplicate seek needed
         player.setMediaItems(mediaItems, startIndex, resumePosition)
         player.prepare()
-        if (resumePosition > 0L) {
-            player.seekTo(startIndex, resumePosition)
-        }
         player.play()
 
         _playerState.update {
@@ -437,15 +470,20 @@ class VTPlayerManager(
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs.coerceAtLeast(0L))
-        _playerState.update { it.copy(currentPosition = positionMs) }
+        val totalDur = if ((exoPlayer?.duration ?: 0L) > 0L) exoPlayer!!.duration else _playerState.value.duration.coerceAtLeast(0L)
+        val target = positionMs.coerceIn(0L, totalDur)
+        lastUserSeekTimestamp = System.currentTimeMillis()
+        _playerState.update { it.copy(currentPosition = target) }
+        exoPlayer?.seekTo(target)
     }
 
     fun seekBy(deltaMs: Long) {
         val player = exoPlayer ?: return
-        val newPos = (player.currentPosition + deltaMs).coerceIn(0L, (player.duration.coerceAtLeast(0L)))
-        player.seekTo(newPos)
+        val totalDur = if (player.duration > 0) player.duration else _playerState.value.duration.coerceAtLeast(0L)
+        val newPos = (player.currentPosition + deltaMs).coerceIn(0L, totalDur)
+        lastUserSeekTimestamp = System.currentTimeMillis()
         _playerState.update { it.copy(currentPosition = newPos) }
+        player.seekTo(newPos)
     }
 
     fun next() {
@@ -709,8 +747,10 @@ class VTPlayerManager(
         _playerState.update { it.copy(subtitleDelayMs = ms) }
     }
 
-    // Audio boost toggle
+    // Audio boost toggle (Exclusive to HW+ mode)
     fun toggleAudioBoost() {
+        val isHwPlus = _playerState.value.decoderMode == DecoderMode.HW_PLUS
+        if (!isHwPlus) return
         val currentVol = _playerState.value.volumePercent
         if (currentVol <= 100) {
             setVolumeWithBoost(150)
@@ -850,12 +890,13 @@ class VTPlayerManager(
         } catch (_: Exception) {}
     }
 
-    // Volume & Boost (0% – 150%)
-    // SW/HW/HW+ are primarily video decoding modes; audio output & boost are controlled via this separate audio pipeline
+    // Volume & Boost: 0% – 100% for SW and HW; 0% – 150% for HW+ (Audio Boost up to +20 dB)
     fun setVolumeWithBoost(percent: Int) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val maxStreamVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
-        val clampedPercent = percent.coerceIn(0, 150)
+        val isHwPlus = _playerState.value.decoderMode == DecoderMode.HW_PLUS
+        val maxAllowed = if (isHwPlus) 150 else 100
+        val clampedPercent = percent.coerceIn(0, maxAllowed)
 
         if (clampedPercent <= 100) {
             // Standard volume range (0% - 100%): Device music volume stream
@@ -877,7 +918,7 @@ class VTPlayerManager(
                 )
             }
         } else {
-            // Volume Boost range (101% - 150%): Maximize standard stream volume & drive Loudness Enhancer up to +20 dB
+            // HW+ Volume Boost range (101% - 150%): Maximize standard stream volume & drive Loudness Enhancer up to +20 dB
             try {
                 audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, maxStreamVolume, 0)
             } catch (_: Exception) {}
@@ -930,6 +971,10 @@ class VTPlayerManager(
                     hardwareDecoding = true
                 )
             }
+            // If switching from HW+ back to HW, enforce 100% audio limit immediately
+            if (newMode == DecoderMode.HW && _playerState.value.volumePercent > 100) {
+                setVolumeWithBoost(100)
+            }
             return
         }
 
@@ -943,7 +988,11 @@ class VTPlayerManager(
         val currentIndex = exoPlayer?.currentMediaItemIndex ?: _playerState.value.currentIndex
         val wasPlaying = exoPlayer?.isPlaying ?: _playerState.value.isPlaying
         val currentSpeed = _playerState.value.playbackSpeed
-        val targetVolume = _playerState.value.volumePercent
+        val targetVolume = if (newMode == DecoderMode.HW_PLUS) {
+            _playerState.value.volumePercent
+        } else {
+            _playerState.value.volumePercent.coerceAtMost(100)
+        }
 
         // Switching between SW and HW/HW+ safely re-initializes and reconnects the surface
         try {

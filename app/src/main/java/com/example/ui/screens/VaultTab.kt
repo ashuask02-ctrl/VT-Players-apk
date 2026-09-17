@@ -354,42 +354,82 @@ fun VaultTab(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .border(1.5.dp, colorScheme.outline, RoundedCornerShape(12.dp)),
+                                    .border(1.5.dp, colorScheme.outline, RoundedCornerShape(12.dp))
+                                    .clickable { onPlayVideo(privateVideo, listOf(privateVideo)) },
                                 colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
                                         modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(colorScheme.primary)
-                                            .clickable { onPlayVideo(privateVideo, listOf(privateVideo)) },
-                                        contentAlignment = Alignment.Center
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = colorScheme.onPrimary)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = colorScheme.onPrimary)
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(record.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text("Hidden from gallery & scan", fontSize = 12.sp, color = colorScheme.onSurface.copy(alpha = 0.6f))
+                                        }
+
+                                        Button(
+                                            onClick = { viewModel.unhideVideo(record.uri, record.title) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Unhide", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
 
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(record.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text("Hidden from gallery & scan", fontSize = 12.sp, color = colorScheme.onSurface.copy(alpha = 0.6f))
-                                    }
-
-                                    Button(
-                                        onClick = { viewModel.unhideVideo(record.uri, record.title) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = colorScheme.surfaceVariant, contentColor = colorScheme.onSurfaceVariant),
-                                        shape = RoundedCornerShape(6.dp)
+                                    // Down side left side resume playback symbol ▶
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Unhide", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    if (privateVideo.hasResumeProgress) colorScheme.primary.copy(alpha = 0.15f)
+                                                    else colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (privateVideo.hasResumeProgress) colorScheme.primary else colorScheme.outline.copy(alpha = 0.4f),
+                                                    RoundedCornerShape(6.dp)
+                                                )
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = "▶",
+                                                color = if (privateVideo.hasResumeProgress) colorScheme.primary else colorScheme.onSurface,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 12.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (privateVideo.hasResumeProgress) "Resume ${privateVideo.formattedLastPosition}" else "Play",
+                                                color = if (privateVideo.hasResumeProgress) colorScheme.primary else colorScheme.onSurface,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.5.sp
+                                            )
+                                        }
                                     }
                                 }
                             }

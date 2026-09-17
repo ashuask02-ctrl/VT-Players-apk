@@ -219,6 +219,7 @@ fun VideoPlayerScreen(
     var hudBrightness by remember { mutableStateOf<Float?>(null) }
     var hudSeekDelta by remember { mutableStateOf<Long?>(null) }
     var hudSeekTarget by remember { mutableStateOf("") }
+    var gestureScrubbingMs by remember { mutableStateOf<Long?>(null) }
     var hudZoomScale by remember { mutableStateOf<Float?>(null) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
@@ -450,10 +451,13 @@ fun VideoPlayerScreen(
                                             hudHideTrigger = 0L
                                         }
                                         2 -> {
-                                            // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases (0% – 150%)
+                                            // Volume (Right Side): Drag UP (downOffset.y > currentPos.y) increases, Drag DOWN decreases
+                                            // Enforce audio limit strictly at 100% for SW and HW modes; up to 150% for HW+
+                                            val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
+                                            val maxAllowed = if (isHwPlus) 150 else 100
                                             val dragUpDistance = downOffset.y - currentPos.y
                                             val fraction = dragUpDistance / (screenHeight * 0.55f)
-                                            val targetPercent = (initialVolPercent + (fraction * 150).toInt()).coerceIn(0, 150)
+                                            val targetPercent = (initialVolPercent + (fraction * maxAllowed).toInt()).coerceIn(0, maxAllowed)
                                             playerManager.setVolumeWithBoost(targetPercent)
                                             hudVolumePercent = targetPercent
                                             hudHideTrigger = 0L
@@ -465,6 +469,7 @@ fun VideoPlayerScreen(
                                             hudSeekDelta = seekDeltaSec
                                             val targetMs = (initialPosition + seekDeltaSec * 1000L).coerceIn(0L, playerState.duration)
                                             hudSeekTarget = formatMs(targetMs)
+                                            gestureScrubbingMs = targetMs
                                             hudHideTrigger = 0L
                                         }
                                     }
@@ -478,6 +483,7 @@ fun VideoPlayerScreen(
                                 val finalTarget = (initialPosition + (seekDeltaSec * 1000L)).coerceIn(0L, playerState.duration)
                                 playerManager.seekTo(finalTarget)
                             }
+                            gestureScrubbingMs = null
                             hudHideTrigger = System.currentTimeMillis()
                         } else {
                             // Finger lifted without dragging: It's a TAP
@@ -719,6 +725,7 @@ fun VideoPlayerScreen(
                     isPlaying = playerState.isPlaying,
                     isLocked = playerState.isControlsLocked,
                     aspectRatioMode = playerState.aspectRatioMode,
+                    scrubbingPositionMs = gestureScrubbingMs,
                     onSeek = { targetMs -> playerManager.seekTo(targetMs) },
                     onLockClick = { playerManager.toggleControlsLock() },
                     onPrevious = { playerManager.previous() },
@@ -776,13 +783,13 @@ fun VideoPlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Filled.History,
-                    contentDescription = null,
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Resumed Playback",
                     tint = VTAccentBlue,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Resumed from ${formatMs(prompt.savedPositionMs)}",
+                    text = "▶ Resumed from ${formatMs(prompt.savedPositionMs)}",
                     color = VTWhite,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.5.sp
@@ -1226,6 +1233,7 @@ fun PlayerBottomControls(
     isPlaying: Boolean,
     isLocked: Boolean,
     aspectRatioMode: AspectRatioMode,
+    scrubbingPositionMs: Long? = null,
     onSeek: (Long) -> Unit,
     onLockClick: () -> Unit,
     onPrevious: () -> Unit,
@@ -1237,6 +1245,16 @@ fun PlayerBottomControls(
 ) {
     var isDraggingSeek by remember { mutableStateOf(false) }
     var tempPosition by remember { mutableFloatStateOf(0f) }
+
+    val totalDuration = playerState.duration.coerceAtLeast(1L)
+    val effectivePos = when {
+        isDraggingSeek -> tempPosition
+        scrubbingPositionMs != null -> scrubbingPositionMs.toFloat()
+        else -> playerState.currentPosition.toFloat()
+    }.coerceIn(0f, totalDuration.toFloat())
+
+    val displayCurrentMs = effectivePos.toLong()
+    val displayRemainingMs = (totalDuration - displayCurrentMs).coerceAtLeast(0L)
 
     Column(
         modifier = modifier
@@ -1254,7 +1272,7 @@ fun PlayerBottomControls(
         ) {
             // Current time (pure white)
             Text(
-                text = if (isDraggingSeek) formatMs(tempPosition.toLong()) else playerState.formattedCurrentTime,
+                text = formatMs(displayCurrentMs),
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
@@ -1263,7 +1281,7 @@ fun PlayerBottomControls(
 
             // Progress/seek bar (transparent background, only black and white)
             Slider(
-                value = if (isDraggingSeek) tempPosition else playerState.currentPosition.toFloat(),
+                value = effectivePos,
                 onValueChange = {
                     isDraggingSeek = true
                     tempPosition = it
@@ -1272,7 +1290,7 @@ fun PlayerBottomControls(
                     isDraggingSeek = false
                     onSeek(tempPosition.toLong())
                 },
-                valueRange = 0f..(playerState.duration.coerceAtLeast(1L).toFloat()),
+                valueRange = 0f..totalDuration.toFloat(),
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
                     activeTrackColor = Color.White,
@@ -1283,9 +1301,9 @@ fun PlayerBottomControls(
                     .testTag("player_seek_bar")
             )
 
-            // Remaining time (black & white: translucent white)
+            // Remaining time (black & white: translucent white, dynamically updates while scrubbing)
             Text(
-                text = playerState.formattedRemainingTime,
+                text = "-${formatMs(displayRemainingMs)}",
                 color = Color.White.copy(alpha = 0.8f),
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,

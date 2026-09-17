@@ -63,6 +63,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
 
     // Fast in-memory cache for exact stopped positions to guarantee instantaneous resume
     private val _lastStoppedPositions = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val _inMemoryPositions = MutableStateFlow<Map<String, Long>>(emptyMap())
 
     // Mini Player Mode
     private val _isMiniPlayer = MutableStateFlow(false)
@@ -138,12 +139,15 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         _scannedVideos,
         hiddenRecords,
         favoriteRecords,
-        recentRecords,
+        combine(recentRecords, _inMemoryPositions) { recList, memPositions ->
+            val map = recList.associate { it.uri to it.lastPosition }.toMutableMap()
+            map.putAll(memPositions)
+            map
+        },
         filterParamsFlow
-    ) { rawList, hiddenList, favList, recList, params ->
+    ) { rawList, hiddenList, favList, posMap, params ->
         val hiddenUris = hiddenList.map { it.uri }.toSet()
         val favUris = favList.map { it.uri }.toSet()
-        val posMap = recList.associate { it.uri to it.lastPosition }
 
         var list = rawList.filter { !hiddenUris.contains(it.uriString) }
 
@@ -198,6 +202,8 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         // Auto-save playback position to database periodically during playback
         playerManager.onPositionSaved = { uri, pos, dur ->
             val vid = _activePlayingVideo.value
+            _lastStoppedPositions[uri] = pos
+            _inMemoryPositions.update { it + (uri to pos) }
             if (vid != null && vid.uriString == uri) {
                 viewModelScope.launch(Dispatchers.IO) {
                     repository.recordPlayback(
@@ -312,6 +318,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSavedPosition(uri: String) {
         _lastStoppedPositions.remove(uri)
+        _inMemoryPositions.update { it - uri }
         viewModelScope.launch(Dispatchers.IO) {
             val existing = repository.getRecordByUri(uri)
             if (existing != null) {
@@ -353,6 +360,7 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
 
         if (current != null && exactPos > 0L) {
             _lastStoppedPositions[current.uriString] = exactPos
+            _inMemoryPositions.update { it + (current.uriString to exactPos) }
             viewModelScope.launch(Dispatchers.IO) {
                 repository.recordPlayback(
                     uri = current.uriString,

@@ -36,6 +36,22 @@ data class VideoItem(
                 String.format("%.1f MB", mb)
             }
         }
+
+    val formattedLastPosition: String
+        get() {
+            val totalSecs = lastPosition / 1000
+            val hours = totalSecs / 3600
+            val minutes = (totalSecs % 3600) / 60
+            val seconds = totalSecs % 60
+            return if (hours > 0) {
+                String.format("%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format("%02d:%02d", minutes, seconds)
+            }
+        }
+
+    val hasResumeProgress: Boolean
+        get() = lastPosition > 1000L && (duration <= 0L || lastPosition < (duration - 3000L))
 }
 
 data class FolderItem(

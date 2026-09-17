@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
@@ -888,8 +889,11 @@ fun AudioSettingsDialog(
 
                     // TAB 1: VOLUME & VOLUME BOOST
                     1 -> {
-                        val boostDb = if (playerState.volumePercent > 100) {
-                            (((playerState.volumePercent - 100) / 50f) * 20f).toInt().coerceIn(1, 20)
+                        val isHwPlus = playerState.decoderMode == DecoderMode.HW_PLUS
+                        val maxVolume = if (isHwPlus) 150f else 100f
+                        val currentVol = playerState.volumePercent.coerceAtMost(maxVolume.toInt())
+                        val boostDb = if (isHwPlus && currentVol > 100) {
+                            (((currentVol - 100) / 50f) * 20f).toInt().coerceIn(1, 20)
                         } else 0
 
                         Row(
@@ -898,12 +902,12 @@ fun AudioSettingsDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Volume: ${playerState.volumePercent}%",
-                                color = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                                text = "Volume: $currentVol%",
+                                color = if (currentVol > 100) Color(0xFFFFB300) else VTWhite,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
-                            if (playerState.volumePercent > 100) {
+                            if (isHwPlus && currentVol > 100) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
@@ -917,18 +921,33 @@ fun AudioSettingsDialog(
                                         fontSize = 11.sp
                                     )
                                 }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(VTDarkCard)
+                                        .border(1.dp, VTDarkBorder, RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = if (isHwPlus) "HW+ (0–150%)" else "${playerState.decoderMode.code} (0–100%)",
+                                        color = Color.LightGray,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Slider(
-                            value = playerState.volumePercent.toFloat().coerceIn(0f, 150f),
+                            value = currentVol.toFloat(),
                             onValueChange = { playerManager.setVolumeWithBoost(it.toInt()) },
-                            valueRange = 0f..150f,
+                            valueRange = 0f..maxVolume,
                             colors = SliderDefaults.colors(
-                                thumbColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
-                                activeTrackColor = if (playerState.volumePercent > 100) Color(0xFFFFB300) else VTWhite,
+                                thumbColor = if (currentVol > 100) Color(0xFFFFB300) else VTWhite,
+                                activeTrackColor = if (currentVol > 100) Color(0xFFFFB300) else VTWhite,
                                 inactiveTrackColor = Color(0xFF333333)
                             )
                         )
@@ -936,15 +955,15 @@ fun AudioSettingsDialog(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Preset chips
-                        val volPresets = listOf(50, 100, 125, 150)
+                        val volPresets = if (isHwPlus) listOf(50, 100, 125, 150) else listOf(25, 50, 75, 100)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             volPresets.forEach { preset ->
-                                val isSelected = playerState.volumePercent == preset
+                                val isSelected = currentVol == preset
                                 val labelText = when (preset) {
-                                    100 -> "100% (Std)"
+                                    100 -> "100%"
                                     125 -> "125% (+10dB)"
                                     150 -> "150% (+20dB)"
                                     else -> "$preset%"
@@ -971,30 +990,63 @@ fun AudioSettingsDialog(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Quick Boost Button
-                        Button(
-                            onClick = { playerManager.toggleAudioBoost() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (playerState.isAudioBoostActive) Color(0xFFFFB300) else VTDarkCard,
-                                contentColor = if (playerState.isAudioBoostActive) VTBlack else VTWhite
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
-                        ) {
-                            Icon(Icons.Filled.VolumeUp, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (playerState.isAudioBoostActive) "Disable Audio Boost (Return to 100%)" else "Enable Volume Boost (150%, +20 dB)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
+                        // Quick Boost Button / Mode Banner
+                        if (isHwPlus) {
+                            Button(
+                                onClick = { playerManager.toggleAudioBoost() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (playerState.isAudioBoostActive) Color(0xFFFFB300) else VTDarkCard,
+                                    contentColor = if (playerState.isAudioBoostActive) VTBlack else VTWhite
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, if (playerState.isAudioBoostActive) Color(0xFFFFB300) else VTDarkBorder, RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(Icons.Filled.VolumeUp, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (playerState.isAudioBoostActive) "Disable Audio Boost (Return to 100%)" else "Enable Volume Boost (150%, +20 dB)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(VTDarkCard)
+                                    .border(1.dp, VTDarkBorder, RoundedCornerShape(8.dp))
+                                    .clickable { playerManager.setDecoderMode(DecoderMode.HW_PLUS) }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Lock, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Volume Boost (101% – 150%) is enabled in HW+ mode",
+                                        color = VTWhite,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = "Tap here to switch to HW+ and unlock +20 dB amplification",
+                                        color = Color(0xFFFFB300),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = "• 0% – 100%: Standard system media volume.\n• 101% – 150%: Dedicated Loudness Enhancer audio effect delivering up to +20 dB amplification.",
+                            text = if (isHwPlus) {
+                                "• 0% – 100%: Standard system media volume.\n• 101% – 150%: Dedicated Loudness Enhancer delivering up to +20 dB amplification."
+                            } else {
+                                "• 0% – 100%: Audio limit strictly maintained at 100% for ${playerState.decoderMode.code} mode.\n• Switch to HW+ to access 101% – 150% (+20 dB) Volume Boost."
+                            },
                             color = Color.LightGray,
                             fontSize = 11.sp,
                             lineHeight = 16.sp
