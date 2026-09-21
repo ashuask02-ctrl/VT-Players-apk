@@ -138,6 +138,7 @@ class VTPlayerManager(
         decoderMode: DecoderMode = _playerState.value.decoderMode,
         audioDecoderMode: AudioDecoderMode = _playerState.value.audioDecoderMode
     ) {
+        attachedPlayerView?.player = null
         exoPlayer?.release()
         exoPlayer = null
         loudnessEnhancer?.release()

@@ -79,7 +79,7 @@ enum class DecoderMode(
 ) {
     SW("SW", "SW Decoder", "Software decoding", 0, 100),
     HW("HW", "HW Decoder", "Hardware decoding", 0, 100),
-    HW_PLUS("HW+", "HW+ Decoder", "Hardware decoder + अतिरिक्त hardware/MediaCodec path", 0, 150)
+    HW_PLUS("HW+", "HW+ Decoder", "Hardware decoder + MediaCodec pipeline & 150% Audio Boost", 0, 150)
 }
 
 enum class AudioDecoderMode(

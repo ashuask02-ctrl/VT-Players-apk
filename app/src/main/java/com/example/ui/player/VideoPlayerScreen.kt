@@ -689,9 +689,9 @@ fun VideoPlayerScreen(
                         val nextMode = playerManager.cycleDecoderMode()
                         viewModel.updatePreferences { it.copy(defaultDecoderMode = nextMode.name) }
                         val msg = when (nextMode) {
-                            DecoderMode.SW -> "Decoder: SW (Software decoding)"
-                            DecoderMode.HW -> "Decoder: HW (Hardware decoding)"
-                            DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ MediaCodec path)"
+                            DecoderMode.SW -> "Switched to SW (Software decoding)"
+                            DecoderMode.HW -> "Switched to HW (Hardware decoding)"
+                            DecoderMode.HW_PLUS -> "Switched to HW+ (Hardware+ Audio Boost 150%)"
                         }
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     },
@@ -909,6 +909,23 @@ fun VideoPlayerScreen(
         )
     }
 
+    if (playerState.showDecoderDialog) {
+        DecoderSelectionDialog(
+            currentMode = playerState.decoderMode,
+            onModeSelected = { selectedMode ->
+                playerManager.setDecoderMode(selectedMode)
+                viewModel.updatePreferences { it.copy(defaultDecoderMode = selectedMode.name) }
+                val msg = when (selectedMode) {
+                    DecoderMode.SW -> "Decoder: SW (Software decoding)"
+                    DecoderMode.HW -> "Decoder: HW (Hardware decoding)"
+                    DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ MediaCodec path)"
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { playerManager.setShowDecoderDialog(false) }
+        )
+    }
+
     if (showSyncDialog) {
         SubtitleAndAudioSyncDialog(
             playerManager = playerManager,
@@ -1053,7 +1070,8 @@ fun PlayerTopBar(
                     .background(badgeBgColor)
                     .border(1.dp, badgeBorderColor, RoundedCornerShape(6.dp))
                     .clickable(onClick = onDecoderClick)
-                    .padding(horizontal = 7.dp, vertical = 3.dp),
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                    .testTag("decoder_mode_badge"),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

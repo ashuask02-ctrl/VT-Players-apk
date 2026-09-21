@@ -576,7 +576,7 @@ fun DecoderSelectionDialog(
         ),
         Triple(
             DecoderMode.HW_PLUS,
-            "HW+ Decoder — Hardware decoder + अतिरिक्त hardware/MediaCodec path",
+            "HW+ Decoder — Hardware decoder + MediaCodec pipeline",
             "Hardware decoder + asynchronous MediaCodec pipeline and direct surface buffer routing."
         )
     )
