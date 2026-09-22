@@ -28,5 +28,21 @@ class ExampleUnitTest {
     val defaultPrefs = PlayerPreferencesEntity()
     assertEquals("SW", defaultPrefs.defaultDecoderMode)
     assertFalse(defaultPrefs.useHardwareDecoder)
+    assertTrue("Call auto-pause feature should be enabled by default", defaultPrefs.pauseOnCall)
+  }
+
+  @Test
+  fun callAutoPauseFeature_defaultPreferencesAndState() {
+    val defaultPrefs = PlayerPreferencesEntity()
+    assertTrue(defaultPrefs.pauseOnCall)
+
+    val updatedPrefs = defaultPrefs.copy(pauseOnCall = false)
+    assertFalse(updatedPrefs.pauseOnCall)
+
+    val playerState = com.example.player.VTPlayerState()
+    assertFalse(playerState.isPausedByCall)
+
+    val pausedByCallState = playerState.copy(isPausedByCall = true)
+    assertTrue(pausedByCallState.isPausedByCall)
   }
 }

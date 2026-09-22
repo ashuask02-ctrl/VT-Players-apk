@@ -198,6 +198,15 @@ fun SettingsTab(
                             viewModel.updatePreferences { it.copy(backgroundPlayback = chk) }
                         }
                     )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsSwitchRow(
+                        title = "Pause on Phone Calls",
+                        subtitle = "Automatically pause playback when receiving or making a call, and resume once the call ends",
+                        checked = prefs.pauseOnCall,
+                        onCheckedChange = { chk ->
+                            viewModel.updatePreferences { it.copy(pauseOnCall = chk) }
+                        }
+                    )
                 }
             }
 

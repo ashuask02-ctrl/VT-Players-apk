@@ -67,5 +67,6 @@ data class PlayerPreferencesEntity(
     val audioPassthrough: Boolean = false,
     val leftRightBalance: Float = 0.0f,
     val preservePitch: Boolean = true,
-    val defaultEqualizerPreset: String = "FLAT"
+    val defaultEqualizerPreset: String = "FLAT",
+    val pauseOnCall: Boolean = true
 )

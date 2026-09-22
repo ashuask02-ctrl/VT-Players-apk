@@ -298,7 +298,7 @@ fun MiniPlayer(
                     .align(Alignment.BottomStart)
             ) {
                 Text(
-                    text = video.title,
+                    text = if (playerState.isPausedByCall) "📞 In Call • ${video.title}" else video.title,
                     color = VTWhite,
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.SemiBold,

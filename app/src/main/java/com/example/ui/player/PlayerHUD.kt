@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
@@ -204,6 +205,51 @@ fun ZoomScrollHUD(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
+        }
+    }
+}
+
+@Composable
+fun CallStateHUD(
+    isPausedByCall: Boolean,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = isPausedByCall,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(VTBlack.copy(alpha = 0.90f))
+                .border(1.5.dp, VTWhite, RoundedCornerShape(20.dp))
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.PhoneInTalk,
+                    contentDescription = "Phone Call",
+                    tint = VTWhite,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Call in progress",
+                        color = VTWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Playback will resume when call ends",
+                        color = Color(0xFFCCCCCC),
+                        fontSize = 11.sp
+                    )
+                }
+            }
         }
     }
 }

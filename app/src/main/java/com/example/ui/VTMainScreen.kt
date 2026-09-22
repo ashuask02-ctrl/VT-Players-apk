@@ -88,26 +88,36 @@ fun VTMainScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
 
-    // Auto-Scan Permission Launcher
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
+    // Auto-Scan & Phone State Permission Launcher
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val mediaGranted = results[Manifest.permission.READ_MEDIA_VIDEO] == true ||
+                results[Manifest.permission.READ_EXTERNAL_STORAGE] == true
+        if (mediaGranted) {
             viewModel.refreshVideos()
         }
+        viewModel.playerManager.callManager.checkAndRecheckPermission()
     }
 
-    // Auto-Scan on launch
+    // Auto-Scan and permissions check on launch
     LaunchedEffect(Unit) {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_VIDEO
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
-        if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
-            viewModel.refreshVideos()
+        val needsMedia = ContextCompat.checkSelfPermission(context, mediaPermission) != PackageManager.PERMISSION_GRANTED
+        val needsPhone = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED
+
+        val permissionsToRequest = mutableListOf<String>()
+        if (needsMedia) permissionsToRequest.add(mediaPermission)
+        if (needsPhone) permissionsToRequest.add(Manifest.permission.READ_PHONE_STATE)
+
+        if (permissionsToRequest.isNotEmpty()) {
+            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
         } else {
-            permissionLauncher.launch(permission)
+            viewModel.refreshVideos()
         }
     }
 

@@ -633,6 +633,17 @@ fun VideoPlayerScreen(
             }
         }
 
+        // Call In Progress HUD Overlay
+        if (playerState.isPausedByCall) {
+            CallStateHUD(
+                isPausedByCall = true,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 16.dp)
+            )
+        }
+
         // Lock/Unlock floating toggle (Always visible when locked, so user can unlock!)
         if (playerState.isControlsLocked) {
             IconButton(

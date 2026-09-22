@@ -53,6 +53,88 @@ class VTPlayerManager(
     private var progressJob: Job? = null
     private var pendingResumePosition: Long = 0L
 
+    var pauseOnCallEnabled: Boolean = true
+        set(value) {
+            field = value
+            callManager.isEnabled = value
+        }
+
+    private var wasPlayingBeforeCall: Boolean = false
+    private var callResumeJob: Job? = null
+    private var callPollerJob: Job? = null
+
+    val callManager: VTCallManager = VTCallManager(
+        context = context,
+        coroutineScope = coroutineScope,
+        onCallStarted = {
+            if (pauseOnCallEnabled) {
+                handleCallStarted()
+            }
+        },
+        onCallEnded = {
+            if (pauseOnCallEnabled) {
+                handleCallEnded()
+            }
+        }
+    )
+
+    fun handleCallStarted() {
+        callResumeJob?.cancel()
+        val isCurrentlyPlaying = exoPlayer?.isPlaying == true || _playerState.value.isPlaying
+        if (isCurrentlyPlaying) {
+            wasPlayingBeforeCall = true
+            _playerState.update { it.copy(isPausedByCall = true) }
+            exoPlayer?.pause()
+            startCallWatchdog()
+        }
+    }
+
+    fun handleCallEnded() {
+        callPollerJob?.cancel()
+        if (!wasPlayingBeforeCall) {
+            _playerState.update { it.copy(isPausedByCall = false) }
+            return
+        }
+        callResumeJob?.cancel()
+        callResumeJob = coroutineScope.launch(Dispatchers.Main) {
+            delay(350)
+            if (wasPlayingBeforeCall && pauseOnCallEnabled) {
+                wasPlayingBeforeCall = false
+                _playerState.update { it.copy(isPausedByCall = false) }
+                exoPlayer?.play()
+            }
+        }
+    }
+
+    private fun startCallWatchdog() {
+        callPollerJob?.cancel()
+        callPollerJob = coroutineScope.launch(Dispatchers.Main) {
+            var normalCount = 0
+            while (wasPlayingBeforeCall && isActive) {
+                delay(1200)
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+                val mode = am?.mode ?: AudioManager.MODE_NORMAL
+                val isNormalMode = mode == AudioManager.MODE_NORMAL
+                val isIdleTelephony = try {
+                    tm?.callState == android.telephony.TelephonyManager.CALL_STATE_IDLE
+                } catch (_: Exception) {
+                    true
+                }
+
+                if (isNormalMode && isIdleTelephony) {
+                    normalCount++
+                    if (normalCount >= 2) {
+                        handleCallEnded()
+                        break
+                    }
+                } else {
+                    normalCount = 0
+                }
+            }
+        }
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             val isBuffering = playbackState == Player.STATE_BUFFERING
@@ -78,6 +160,26 @@ class VTPlayerManager(
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _playerState.update { it.copy(isPlaying = isPlaying) }
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
+                if (pauseOnCallEnabled && _playerState.value.isPlaying) {
+                    handleCallStarted()
+                }
+            }
+        }
+
+        override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+            if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
+                if (pauseOnCallEnabled && _playerState.value.isPlaying) {
+                    handleCallStarted()
+                }
+            } else if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
+                if (wasPlayingBeforeCall) {
+                    handleCallEnded()
+                }
+            }
         }
 
         override fun onTracksChanged(tracks: Tracks) {
@@ -434,6 +536,10 @@ class VTPlayerManager(
         }
 
         pendingResumePosition = resumePosition
+        wasPlayingBeforeCall = false
+        callPollerJob?.cancel()
+        callResumeJob?.cancel()
+        _playerState.update { it.copy(isPausedByCall = false) }
         // setMediaItems already starts at startIndex and resumePosition; no duplicate seek needed
         player.setMediaItems(mediaItems, startIndex, resumePosition)
         player.prepare()
@@ -454,6 +560,10 @@ class VTPlayerManager(
 
     fun togglePlayPause() {
         val player = exoPlayer ?: return
+        wasPlayingBeforeCall = false
+        callPollerJob?.cancel()
+        callResumeJob?.cancel()
+        _playerState.update { it.copy(isPausedByCall = false) }
         if (player.isPlaying) {
             player.pause()
         } else {
@@ -464,10 +574,13 @@ class VTPlayerManager(
     fun stop() {
         progressJob?.cancel()
         pendingResumePosition = 0L
+        wasPlayingBeforeCall = false
+        callPollerJob?.cancel()
+        callResumeJob?.cancel()
         val player = exoPlayer ?: return
         player.pause()
         player.stop()
-        _playerState.update { it.copy(isPlaying = false) }
+        _playerState.update { it.copy(isPlaying = false, isPausedByCall = false) }
     }
 
     fun seekTo(positionMs: Long) {
@@ -1025,6 +1138,9 @@ class VTPlayerManager(
     }
 
     fun release() {
+        callPollerJob?.cancel()
+        callResumeJob?.cancel()
+        callManager.release()
         progressJob?.cancel()
         loudnessEnhancer?.release()
         equalizer?.release()

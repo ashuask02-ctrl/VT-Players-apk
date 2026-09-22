@@ -21,6 +21,7 @@ data class VTPlayerState(
     val aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT,
     val isPipActive: Boolean = false,
     val isBackgroundPlaybackEnabled: Boolean = false,
+    val isPausedByCall: Boolean = false,
     // Gestures HUD feedback
     val gestureBrightness: Float? = null, // 0f..1f
     val gestureVolume: Float? = null,     // 0f..1f

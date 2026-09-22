@@ -199,6 +199,13 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
         refreshVideos()
         checkVaultPinStatus()
 
+        // Sync call auto-pause preference with playerManager
+        viewModelScope.launch {
+            preferences.collect { prefs ->
+                playerManager.pauseOnCallEnabled = prefs.pauseOnCall
+            }
+        }
+
         // Auto-save playback position to database periodically during playback
         playerManager.onPositionSaved = { uri, pos, dur ->
             val vid = _activePlayingVideo.value

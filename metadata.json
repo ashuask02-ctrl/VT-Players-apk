@@ -1,6 +1,6 @@
 {
   "name": "VT Player",
-  "description": "High-performance video player featuring SW and HW Decoding Engines (0%–100% Volume), gestures, multi-track audio, subtitles, PiP, network streaming, and private vault in high-contrast Black & White design.",
+  "description": "High-performance video player featuring SW and HW Decoding Engines (0%–100% Volume), phone call auto-pause & auto-resume, gestures, multi-track audio, subtitles, PiP, network streaming, and private vault in high-contrast Black & White design.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
