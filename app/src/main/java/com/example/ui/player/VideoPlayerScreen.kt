@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -123,6 +124,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.model.AspectRatioMode
 import com.example.model.DecoderMode
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.model.VideoItem
 import com.example.player.VTPlayerState
 import com.example.ui.theme.VTAccentBlue
@@ -356,6 +359,21 @@ fun VideoPlayerScreen(
                     translationY = panY
                 )
         )
+
+        // Movie Picture Profile Layer
+        if (playerState.movieColorFilter != MovieColorFilter.STANDARD) {
+            val filterColor = when (playerState.movieColorFilter) {
+                MovieColorFilter.CINEMA -> Color(0xFFD4AF37).copy(alpha = 0.07f)
+                MovieColorFilter.WARM -> Color(0xFFFFA726).copy(alpha = 0.10f)
+                MovieColorFilter.VIVID -> Color(0xFF00E5FF).copy(alpha = 0.05f)
+                MovieColorFilter.STANDARD -> Color.Transparent
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(filterColor)
+            )
+        }
 
         // Gestures Layer (Unified single pointer handler for tap, double-tap, vertical drag volume/brightness, horizontal seek, and 2-finger zoom)
         Box(
@@ -685,6 +703,7 @@ fun VideoPlayerScreen(
                     onMinimize = onMinimize,
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
+                    onMovieQualityClick = { playerManager.setShowMovieQualityDialog(true) },
                     onDecoderClick = {
                         val nextMode = playerManager.cycleDecoderMode()
                         viewModel.updatePreferences { it.copy(defaultDecoderMode = nextMode.name) }
@@ -937,6 +956,34 @@ fun VideoPlayerScreen(
         )
     }
 
+    if (playerState.showMovieQualityDialog) {
+        MovieQualityDialog(
+            playerManager = playerManager,
+            playerState = playerState,
+            onQualitySelected = { quality ->
+                playerManager.setHwMovieQuality(quality)
+                viewModel.updatePreferences { it.copy(hwMovieQuality = quality.name) }
+                Toast.makeText(context, "HW Movie Quality: ${quality.title}", Toast.LENGTH_SHORT).show()
+            },
+            onColorFilterSelected = { filter ->
+                playerManager.setMovieColorFilter(filter)
+                viewModel.updatePreferences { it.copy(movieColorFilter = filter.name) }
+                Toast.makeText(context, "Picture: ${filter.title}", Toast.LENGTH_SHORT).show()
+            },
+            onDecoderModeSelected = { selectedMode ->
+                playerManager.setDecoderMode(selectedMode)
+                viewModel.updatePreferences { it.copy(defaultDecoderMode = selectedMode.name) }
+                val msg = when (selectedMode) {
+                    DecoderMode.SW -> "Decoder: SW (Software decoding)"
+                    DecoderMode.HW -> "Decoder: HW (Hardware decoding)"
+                    DecoderMode.HW_PLUS -> "Decoder: HW+ (Hardware+ MediaCodec path)"
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { playerManager.setShowMovieQualityDialog(false) }
+        )
+    }
+
     if (showSyncDialog) {
         SubtitleAndAudioSyncDialog(
             playerManager = playerManager,
@@ -962,6 +1009,7 @@ fun PlayerTopBar(
     onMinimize: () -> Unit = onBack,
     onAudioTracksClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
+    onMovieQualityClick: () -> Unit = {},
     onDecoderClick: () -> Unit = {},
     onAudioSettingsClick: () -> Unit = {},
     onToggleHardwareDecoding: () -> Unit = onDecoderClick,
@@ -1093,6 +1141,27 @@ fun PlayerTopBar(
                 )
             }
 
+            // HW Movie Quality Badge (Ultra / 1080p / 720p / 480p)
+            val quality = playerState.hwMovieQuality
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1E2638))
+                    .border(1.dp, VTAccentBlue, RoundedCornerShape(6.dp))
+                    .clickable(onClick = onMovieQualityClick)
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                    .testTag("movie_quality_badge"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = quality.badgeLabel,
+                    color = VTWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+
             // 1X Speed Toggle
             Box(
                 modifier = Modifier
@@ -1197,6 +1266,19 @@ fun PlayerTopBar(
                         onClick = {
                             showMenu = false
                             onToggleHardwareDecoding()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("HW Movie Quality: ${playerState.hwMovieQuality.badgeLabel}", color = VTWhite, fontWeight = FontWeight.Bold)
+                                Text("${playerState.hwMovieQuality.title} • ${playerState.movieColorFilter.title}", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        },
+                        leadingIcon = { Icon(Icons.Filled.HighQuality, contentDescription = null, tint = VTWhite) },
+                        onClick = {
+                            showMenu = false
+                            onMovieQualityClick()
                         }
                     )
                     DropdownMenuItem(

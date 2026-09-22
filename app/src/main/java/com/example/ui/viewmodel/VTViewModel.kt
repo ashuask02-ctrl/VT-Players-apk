@@ -13,6 +13,8 @@ import com.example.data.PlaylistEntity
 import com.example.data.VTRepository
 import com.example.model.DecoderMode
 import com.example.model.FolderItem
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.model.SortOrder
 import com.example.model.StreamPreset
 import com.example.model.VideoItem
@@ -288,6 +290,20 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             if (playerManager.playerState.value.decoderMode != preferredDecoder) {
                 playerManager.setDecoderMode(preferredDecoder)
             }
+
+            val preferredQuality = try {
+                HwMovieQuality.valueOf(prefs.hwMovieQuality)
+            } catch (e: Exception) {
+                HwMovieQuality.ULTRA
+            }
+            playerManager.setHwMovieQuality(preferredQuality)
+
+            val preferredFilter = try {
+                MovieColorFilter.valueOf(prefs.movieColorFilter)
+            } catch (e: Exception) {
+                MovieColorFilter.STANDARD
+            }
+            playerManager.setMovieColorFilter(preferredFilter)
 
             val inMemoryPos = _lastStoppedPositions[video.uriString]
             val record = repository.getRecordByUri(video.uriString)

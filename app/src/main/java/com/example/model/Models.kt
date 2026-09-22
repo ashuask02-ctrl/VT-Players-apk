@@ -128,3 +128,61 @@ enum class SortOrder(val displayName: String) {
     SIZE_DESC("Size (Largest first)"),
     DURATION_DESC("Duration (Longest first)")
 }
+
+enum class HwMovieQuality(
+    val code: String,
+    val title: String,
+    val description: String,
+    val badgeLabel: String,
+    val maxWidth: Int,
+    val maxHeight: Int,
+    val maxBitrate: Int
+) {
+    ULTRA(
+        code = "ULTRA",
+        title = "Ultra (Original / 4K Direct HW)",
+        description = "Direct hardware surface buffer, native bitstream, uncompressed up to 4K 60fps.",
+        badgeLabel = "HQ: 4K",
+        maxWidth = Int.MAX_VALUE,
+        maxHeight = Int.MAX_VALUE,
+        maxBitrate = Int.MAX_VALUE
+    ),
+    HIGH(
+        code = "1080P",
+        title = "Full HD (1080p)",
+        description = "Hardware accelerated 1080p decoding optimized for clarity and fluid motion.",
+        badgeLabel = "1080p",
+        maxWidth = 1920,
+        maxHeight = 1080,
+        maxBitrate = 15_000_000
+    ),
+    BALANCED(
+        code = "720P",
+        title = "HD Balanced (720p)",
+        description = "Balanced 720p hardware decoding. Smooth playback with lower power and heat.",
+        badgeLabel = "720p",
+        maxWidth = 1280,
+        maxHeight = 720,
+        maxBitrate = 6_000_000
+    ),
+    SAVER(
+        code = "480P",
+        title = "Battery Saver (480p SD)",
+        description = "Power-saving hardware decoding capped at 480p SD for maximum battery life.",
+        badgeLabel = "480p",
+        maxWidth = 854,
+        maxHeight = 480,
+        maxBitrate = 2_500_000
+    )
+}
+
+enum class MovieColorFilter(
+    val code: String,
+    val title: String,
+    val description: String
+) {
+    STANDARD("STANDARD", "Natural / Standard", "True original colors without post-processing"),
+    CINEMA("CINEMA", "Cinema Movie", "Warm tones and boosted contrast for cinematic immersion"),
+    VIVID("VIVID", "Vivid Pop", "High saturation and vibrant contrast for animated/HDR content"),
+    WARM("WARM", "Warm Night", "Gentle amber tone with reduced blue light for eye comfort")
+}

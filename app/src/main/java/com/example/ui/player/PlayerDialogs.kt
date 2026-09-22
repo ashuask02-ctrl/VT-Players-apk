@@ -28,9 +28,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
@@ -74,6 +76,8 @@ import com.example.model.AspectRatioMode
 import com.example.model.AudioDecoderMode
 import com.example.model.DecoderMode
 import com.example.model.EqualizerPreset
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.player.VTPlayerManager
 import com.example.player.VTPlayerState
 import com.example.ui.theme.VTAccentBlue
@@ -673,6 +677,276 @@ fun DecoderSelectionDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = VTWhite, contentColor = VTBlack)
             ) {
                 Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+fun MovieQualityDialog(
+    playerManager: VTPlayerManager,
+    playerState: VTPlayerState,
+    onQualitySelected: (HwMovieQuality) -> Unit,
+    onColorFilterSelected: (MovieColorFilter) -> Unit,
+    onDecoderModeSelected: (DecoderMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = VTBlack,
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.border(1.5.dp, VTWhite, RoundedCornerShape(18.dp)),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.HighQuality, contentDescription = null, tint = VTWhite)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("HW Movie Quality & Video Engine", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Section 1: Active Decoding Engine (SW / HW / HW+)
+                Text("Decoding Engine", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val decoders = listOf(DecoderMode.SW, DecoderMode.HW, DecoderMode.HW_PLUS)
+                    decoders.forEach { mode ->
+                        val isSelected = (mode == playerState.decoderMode)
+                        val accentColor = when (mode) {
+                            DecoderMode.SW -> VTAccentBlue
+                            DecoderMode.HW -> VTAccentGreen
+                            DecoderMode.HW_PLUS -> Color(0xFFFFB300)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) VTWhite else VTDarkCard)
+                                .border(1.5.dp, if (isSelected) accentColor else VTDarkBorder, RoundedCornerShape(8.dp))
+                                .clickable { onDecoderModeSelected(mode) }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = mode.code,
+                                    color = if (isSelected) VTBlack else accentColor,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = when (mode) {
+                                        DecoderMode.SW -> "Software"
+                                        DecoderMode.HW -> "Hardware"
+                                        DecoderMode.HW_PLUS -> "HW+ Boost"
+                                    },
+                                    color = if (isSelected) Color(0xFF333333) else Color.Gray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = Color(0xFF2A2A2A))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Section 2: HW Movie Quality Presets (Resolution & Bitrate)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Tune, contentDescription = null, tint = VTWhite, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("HW Movie Quality (Resolution & Bitrate)", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                HwMovieQuality.entries.forEach { quality ->
+                    val isSelected = (quality == playerState.hwMovieQuality)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) VTWhite else VTDarkCard)
+                            .border(1.dp, if (isSelected) VTWhite else VTDarkBorder, RoundedCornerShape(10.dp))
+                            .clickable {
+                                onQualitySelected(quality)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (isSelected) VTBlack else Color(0xFF333333))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = quality.badgeLabel,
+                                        color = VTWhite,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = quality.title,
+                                    color = if (isSelected) VTBlack else VTWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = quality.description,
+                                color = if (isSelected) Color(0xFF333333) else Color(0xFFAAAAAA),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = VTBlack,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = Color(0xFF2A2A2A))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Section 3: Movie Picture & Color Enhancements
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Palette, contentDescription = null, tint = VTWhite, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Movie Picture Profile", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                MovieColorFilter.entries.forEach { filter ->
+                    val isSelected = (filter == playerState.movieColorFilter)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) VTWhite else VTDarkCard)
+                            .border(1.dp, if (isSelected) VTWhite else VTDarkBorder, RoundedCornerShape(10.dp))
+                            .clickable {
+                                onColorFilterSelected(filter)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = filter.title,
+                                color = if (isSelected) VTBlack else VTWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = filter.description,
+                                color = if (isSelected) Color(0xFF333333) else Color(0xFFAAAAAA),
+                                fontSize = 11.sp
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = VTBlack,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // Section 4: Individual Video Tracks / Stream Resolutions (if stream has multiple qualities)
+                if (playerState.videoTracks.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = Color(0xFF2A2A2A))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Embedded Video Tracks", color = VTWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val isAuto = (playerState.selectedVideoTrackId == null)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isAuto) VTWhite else VTDarkCard)
+                            .border(1.dp, if (isAuto) VTWhite else VTDarkBorder, RoundedCornerShape(10.dp))
+                            .clickable {
+                                playerManager.selectVideoTrack(null)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Auto (Select by HW Quality setting)",
+                            color = if (isAuto) VTBlack else VTWhite,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isAuto) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = VTBlack, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    playerState.videoTracks.forEach { track ->
+                        val isTrackSelected = (track.id == playerState.selectedVideoTrackId)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isTrackSelected) VTWhite else VTDarkCard)
+                                .border(1.dp, if (isTrackSelected) VTWhite else VTDarkBorder, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    playerManager.selectVideoTrack(track)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = track.label,
+                                color = if (isTrackSelected) VTBlack else VTWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isTrackSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = VTBlack, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = VTWhite, contentColor = VTBlack)
+            ) {
+                Text("Done", fontWeight = FontWeight.Bold)
             }
         }
     )

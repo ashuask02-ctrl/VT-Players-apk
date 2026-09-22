@@ -45,4 +45,53 @@ class ExampleUnitTest {
     val pausedByCallState = playerState.copy(isPausedByCall = true)
     assertTrue(pausedByCallState.isPausedByCall)
   }
+
+  @Test
+  fun hwMovieQuality_propertiesAndPreferences() {
+    val qualities = com.example.model.HwMovieQuality.values()
+    assertEquals(4, qualities.size)
+    assertEquals(com.example.model.HwMovieQuality.ULTRA, qualities[0])
+    assertEquals(com.example.model.HwMovieQuality.HIGH, qualities[1])
+    assertEquals(com.example.model.HwMovieQuality.BALANCED, qualities[2])
+    assertEquals(com.example.model.HwMovieQuality.SAVER, qualities[3])
+
+    // Verify Ultra allows maximum dimensions and unconstrained bitrate
+    assertEquals(Int.MAX_VALUE, com.example.model.HwMovieQuality.ULTRA.maxWidth)
+    assertEquals(Int.MAX_VALUE, com.example.model.HwMovieQuality.ULTRA.maxHeight)
+    assertEquals(Int.MAX_VALUE, com.example.model.HwMovieQuality.ULTRA.maxBitrate)
+
+    // Verify 1080p constraints
+    assertEquals(1920, com.example.model.HwMovieQuality.HIGH.maxWidth)
+    assertEquals(1080, com.example.model.HwMovieQuality.HIGH.maxHeight)
+
+    // Verify 720p constraints
+    assertEquals(1280, com.example.model.HwMovieQuality.BALANCED.maxWidth)
+    assertEquals(720, com.example.model.HwMovieQuality.BALANCED.maxHeight)
+
+    // Verify 480p constraints
+    assertEquals(854, com.example.model.HwMovieQuality.SAVER.maxWidth)
+    assertEquals(480, com.example.model.HwMovieQuality.SAVER.maxHeight)
+
+    // Default preferences
+    val defaultPrefs = PlayerPreferencesEntity()
+    assertEquals("ULTRA", defaultPrefs.hwMovieQuality)
+    assertEquals("STANDARD", defaultPrefs.movieColorFilter)
+
+    val updatedPrefs = defaultPrefs.copy(
+        hwMovieQuality = com.example.model.HwMovieQuality.BALANCED.name,
+        movieColorFilter = com.example.model.MovieColorFilter.CINEMA.name
+    )
+    assertEquals("BALANCED", updatedPrefs.hwMovieQuality)
+    assertEquals("CINEMA", updatedPrefs.movieColorFilter)
+  }
+
+  @Test
+  fun movieColorFilter_properties() {
+    val filters = com.example.model.MovieColorFilter.values()
+    assertEquals(4, filters.size)
+    assertTrue(filters.contains(com.example.model.MovieColorFilter.STANDARD))
+    assertTrue(filters.contains(com.example.model.MovieColorFilter.CINEMA))
+    assertTrue(filters.contains(com.example.model.MovieColorFilter.VIVID))
+    assertTrue(filters.contains(com.example.model.MovieColorFilter.WARM))
+  }
 }

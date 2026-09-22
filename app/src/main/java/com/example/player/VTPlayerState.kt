@@ -4,6 +4,8 @@ import com.example.model.AspectRatioMode
 import com.example.model.AudioDecoderMode
 import com.example.model.DecoderMode
 import com.example.model.EqualizerPreset
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.model.TrackItem
 import com.example.model.VideoItem
 
@@ -36,8 +38,13 @@ data class VTPlayerState(
     // Tracks
     val audioTracks: List<TrackItem> = emptyList(),
     val subtitleTracks: List<TrackItem> = emptyList(),
+    val videoTracks: List<TrackItem> = emptyList(),
     val selectedAudioTrackId: String? = null,
     val selectedSubtitleTrackId: String? = null,
+    val selectedVideoTrackId: String? = null,
+    // Movie Quality & Picture Filter
+    val hwMovieQuality: HwMovieQuality = HwMovieQuality.ULTRA,
+    val movieColorFilter: MovieColorFilter = MovieColorFilter.STANDARD,
     // Delay offsets
     val subtitleDelayMs: Long = 0L,
     val audioDelayMs: Long = 0L,
@@ -60,6 +67,7 @@ data class VTPlayerState(
     val showSubtitleStyleDialog: Boolean = false,
     val showEqualizerDialog: Boolean = false,
     val showDecoderDialog: Boolean = false,
+    val showMovieQualityDialog: Boolean = false,
     val showAudioSettingsDialog: Boolean = false,
     val showMoreMenu: Boolean = false,
     val resumePrompt: ResumePromptData? = null

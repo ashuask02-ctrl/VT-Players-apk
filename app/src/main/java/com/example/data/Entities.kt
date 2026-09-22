@@ -68,5 +68,7 @@ data class PlayerPreferencesEntity(
     val leftRightBalance: Float = 0.0f,
     val preservePitch: Boolean = true,
     val defaultEqualizerPreset: String = "FLAT",
-    val pauseOnCall: Boolean = true
+    val pauseOnCall: Boolean = true,
+    val hwMovieQuality: String = "ULTRA", // "ULTRA", "1080P", "720P", "480P"
+    val movieColorFilter: String = "STANDARD" // "STANDARD", "CINEMA", "VIVID", "WARM"
 )

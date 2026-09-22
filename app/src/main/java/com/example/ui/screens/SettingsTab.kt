@@ -59,6 +59,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.ui.theme.VTAccentGreen
 import com.example.ui.theme.VTAccentRed
 import com.example.ui.viewmodel.VTViewModel
@@ -78,6 +80,8 @@ fun SettingsTab(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showOrientationDialog by remember { mutableStateOf(false) }
     var showDecoderDialog by remember { mutableStateOf(false) }
+    var showHwQualityDialog by remember { mutableStateOf(false) }
+    var showColorFilterDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -243,9 +247,9 @@ fun SettingsTab(
                 }
             }
 
-            // Video Decoder (SW, HW, HW+)
+            // Video Decoder & HW Movie Quality (SW, HW, HW+)
             item {
-                SettingsSectionHeader("Video Decoder (SW, HW, HW+)", Icons.Filled.Memory)
+                SettingsSectionHeader("Video Decoder & HW Movie Quality", Icons.Filled.Memory)
                 SettingsCard {
                     SettingsRow(
                         title = "Default Video Decoder",
@@ -255,6 +259,28 @@ fun SettingsTab(
                             else -> "SW (Software Standard, 0%–100% Volume)"
                         },
                         onClick = { showDecoderDialog = true }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    val currentQuality = try {
+                        HwMovieQuality.valueOf(prefs.hwMovieQuality)
+                    } catch (e: Exception) {
+                        HwMovieQuality.ULTRA
+                    }
+                    SettingsRow(
+                        title = "HW Movie Quality Preset",
+                        subtitle = "${currentQuality.title} (${currentQuality.description})",
+                        onClick = { showHwQualityDialog = true }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    val currentColorFilter = try {
+                        MovieColorFilter.valueOf(prefs.movieColorFilter)
+                    } catch (e: Exception) {
+                        MovieColorFilter.STANDARD
+                    }
+                    SettingsRow(
+                        title = "Movie Picture Profile",
+                        subtitle = "${currentColorFilter.title} (${currentColorFilter.description})",
+                        onClick = { showColorFilterDialog = true }
                     )
                 }
             }
@@ -673,6 +699,168 @@ fun SettingsTab(
             confirmButton = {
                 Button(
                     onClick = { showDecoderDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // HW Movie Quality Preset Dialog
+    if (showHwQualityDialog) {
+        val qualities = HwMovieQuality.values()
+        AlertDialog(
+            onDismissRequest = { showHwQualityDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Hardware Movie Quality",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    qualities.forEach { quality ->
+                        val isSelected = (quality.name == prefs.hwMovieQuality)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.updatePreferences { it.copy(hwMovieQuality = quality.name) }
+                                    showHwQualityDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = quality.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(colorScheme.primary.copy(alpha = 0.2f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = quality.badgeLabel,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = quality.description,
+                                    fontSize = 11.sp,
+                                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showHwQualityDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Movie Picture Profile Dialog
+    if (showColorFilterDialog) {
+        val filters = MovieColorFilter.values()
+        AlertDialog(
+            onDismissRequest = { showColorFilterDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Movie Picture Profile",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    filters.forEach { filter ->
+                        val isSelected = (filter.name == prefs.movieColorFilter)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.updatePreferences { it.copy(movieColorFilter = filter.name) }
+                                    showColorFilterDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = filter.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = colorScheme.onSurface
+                                )
+                                Text(
+                                    text = filter.description,
+                                    fontSize = 11.sp,
+                                    color = colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showColorFilterDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
                 ) {
                     Text("Close")

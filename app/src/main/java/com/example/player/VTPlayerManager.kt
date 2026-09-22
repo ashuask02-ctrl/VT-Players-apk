@@ -22,6 +22,8 @@ import com.example.model.AspectRatioMode
 import com.example.model.AudioDecoderMode
 import com.example.model.DecoderMode
 import com.example.model.EqualizerPreset
+import com.example.model.HwMovieQuality
+import com.example.model.MovieColorFilter
 import com.example.model.TrackItem
 import com.example.model.VideoItem
 import kotlinx.coroutines.CoroutineScope
@@ -249,6 +251,7 @@ class VTPlayerManager(
         equalizer = null
 
         trackSelector = DefaultTrackSelector(context)
+        applyTrackSelectorQualityParameters(_playerState.value.hwMovieQuality)
 
         val renderersFactory = DefaultRenderersFactory(context).apply {
             setEnableDecoderFallback(true)
@@ -418,8 +421,10 @@ class VTPlayerManager(
     private fun updateAvailableTracks(tracks: Tracks) {
         val audioList = mutableListOf<TrackItem>()
         val subList = mutableListOf<TrackItem>()
+        val videoList = mutableListOf<TrackItem>()
         var selectedAudioId: String? = null
         var selectedSubId: String? = null
+        var selectedVideoId: String? = null
 
         tracks.groups.forEachIndexed { groupIndex, group ->
             val trackType = group.type
@@ -427,7 +432,7 @@ class VTPlayerManager(
                 val format = group.getTrackFormat(i)
                 val isSelected = group.isTrackSelected(i)
                 val id = "${trackType}_${groupIndex}_$i"
-                val defaultLabel = format.label ?: if (trackType == C.TRACK_TYPE_AUDIO) "Audio Track ${audioList.size + 1}" else "Subtitle ${subList.size + 1}"
+                val defaultLabel = format.label ?: if (trackType == C.TRACK_TYPE_AUDIO) "Audio Track ${audioList.size + 1}" else if (trackType == C.TRACK_TYPE_TEXT) "Subtitle ${subList.size + 1}" else "Video Quality ${videoList.size + 1}"
                 val rawLang = format.language ?: "Unknown"
                 val label = if (rawLang.isNotBlank() && rawLang != "Unknown" && rawLang != "und") {
                     formatLanguageLabel(rawLang, defaultLabel)
@@ -439,6 +444,25 @@ class VTPlayerManager(
                 } else if (trackType == C.TRACK_TYPE_TEXT) {
                     subList.add(TrackItem(id, label, rawLang, isSelected))
                     if (isSelected) selectedSubId = id
+                } else if (trackType == C.TRACK_TYPE_VIDEO) {
+                    val width = format.width
+                    val height = format.height
+                    val bitrate = format.bitrate
+                    val resLabel = if (width > 0 && height > 0) {
+                        val pLabel = when {
+                            height >= 2160 || width >= 3840 -> "4K UHD (${width}x${height})"
+                            height >= 1440 || width >= 2560 -> "2K QHD (${width}x${height})"
+                            height >= 1080 || width >= 1920 -> "1080p FHD (${width}x${height})"
+                            height >= 720 || width >= 1280 -> "720p HD (${width}x${height})"
+                            height >= 480 || width >= 854 -> "480p SD (${width}x${height})"
+                            else -> "${width}x${height}"
+                        }
+                        if (bitrate > 0) "$pLabel • ${bitrate / 1000} kbps" else pLabel
+                    } else {
+                        format.label ?: "Quality ${videoList.size + 1}"
+                    }
+                    videoList.add(TrackItem(id, resLabel, "video", isSelected))
+                    if (isSelected) selectedVideoId = id
                 }
             }
         }
@@ -447,8 +471,10 @@ class VTPlayerManager(
             it.copy(
                 audioTracks = audioList,
                 subtitleTracks = subList,
+                videoTracks = videoList,
                 selectedAudioTrackId = selectedAudioId ?: it.selectedAudioTrackId,
-                selectedSubtitleTrackId = selectedSubId ?: it.selectedSubtitleTrackId
+                selectedSubtitleTrackId = selectedSubId ?: it.selectedSubtitleTrackId,
+                selectedVideoTrackId = selectedVideoId ?: it.selectedVideoTrackId
             )
         }
     }
@@ -781,6 +807,62 @@ class VTPlayerManager(
         }
     }
 
+    fun selectVideoTrack(trackItem: TrackItem?) {
+        if (trackItem == null) {
+            // Auto quality
+            trackSelector.setParameters(
+                trackSelector.buildUponParameters()
+                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            )
+            _playerState.update { it.copy(selectedVideoTrackId = null) }
+            applyTrackSelectorQualityParameters(_playerState.value.hwMovieQuality)
+            return
+        }
+
+        val tracks = exoPlayer?.currentTracks ?: return
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            if (group.type == C.TRACK_TYPE_VIDEO) {
+                for (i in 0 until group.length) {
+                    val id = "${C.TRACK_TYPE_VIDEO}_${groupIndex}_$i"
+                    if (id == trackItem.id || "${group.mediaTrackGroup.id}_$i" == trackItem.id) {
+                        trackSelector.setParameters(
+                            trackSelector.buildUponParameters()
+                                .setOverrideForType(
+                                    TrackSelectionOverride(group.mediaTrackGroup, i)
+                                )
+                        )
+                        _playerState.update { it.copy(selectedVideoTrackId = trackItem.id) }
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    fun setHwMovieQuality(quality: HwMovieQuality) {
+        _playerState.update { it.copy(hwMovieQuality = quality) }
+        applyTrackSelectorQualityParameters(quality)
+    }
+
+    fun applyTrackSelectorQualityParameters(quality: HwMovieQuality) {
+        val builder = trackSelector.buildUponParameters()
+            .setMaxVideoSize(quality.maxWidth, quality.maxHeight)
+            .setMaxVideoBitrate(quality.maxBitrate)
+            .setAllowVideoMixedMimeTypeAdaptiveness(true)
+            .setAllowVideoNonSeamlessAdaptiveness(true)
+
+        if (quality == HwMovieQuality.ULTRA) {
+            builder.setForceHighestSupportedBitrate(true)
+        } else {
+            builder.setForceHighestSupportedBitrate(false)
+        }
+        trackSelector.setParameters(builder)
+    }
+
+    fun setMovieColorFilter(filter: MovieColorFilter) {
+        _playerState.update { it.copy(movieColorFilter = filter) }
+    }
+
     fun selectAudioByLanguage(langPrefix: String): Boolean {
         val target = langPrefix.lowercase(java.util.Locale.ROOT)
         val match = _playerState.value.audioTracks.firstOrNull {
@@ -887,6 +969,7 @@ class VTPlayerManager(
     fun setShowSubtitleStyleDialog(show: Boolean) = _playerState.update { it.copy(showSubtitleStyleDialog = show) }
     fun setShowEqualizerDialog(show: Boolean) = _playerState.update { it.copy(showEqualizerDialog = show) }
     fun setShowDecoderDialog(show: Boolean) = _playerState.update { it.copy(showDecoderDialog = show) }
+    fun setShowMovieQualityDialog(show: Boolean) = _playerState.update { it.copy(showMovieQualityDialog = show) }
     fun setShowAudioSettingsDialog(show: Boolean) = _playerState.update { it.copy(showAudioSettingsDialog = show) }
     fun setShowMoreMenu(show: Boolean) = _playerState.update { it.copy(showMoreMenu = show) }
 
