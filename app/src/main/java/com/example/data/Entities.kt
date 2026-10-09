@@ -70,5 +70,9 @@ data class PlayerPreferencesEntity(
     val defaultEqualizerPreset: String = "FLAT",
     val pauseOnCall: Boolean = true,
     val hwMovieQuality: String = "ULTRA", // "ULTRA", "1080P", "720P", "480P"
-    val movieColorFilter: String = "STANDARD" // "STANDARD", "CINEMA", "VIVID", "WARM"
+    val movieColorFilter: String = "STANDARD", // "STANDARD", "CINEMA", "VIVID", "WARM"
+    val autoAdjustPortableScreen: Boolean = true, // Automatically adapt portable mini-player aspect ratio to video proportions
+    val autoScreenOrientationToVideo: Boolean = true, // Automatically switch screen orientation to match video (landscape for movies, portrait for vertical)
+    val portableWindowSize: String = "AUTO", // "AUTO", "COMPACT", "STANDARD", "LARGE"
+    val portableResizeMode: String = "FIT" // "FIT", "ZOOM", "STRETCH"
 )

@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -33,7 +34,9 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Sync
@@ -1611,6 +1614,197 @@ fun FrameByFrameDialog(
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(Icons.Filled.FastForward, contentDescription = null)
                     }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = VTWhite, contentColor = VTBlack)
+            ) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+fun PortableScreenAdjustDialog(
+    playerState: com.example.player.VTPlayerState,
+    onAutoAdjustToggle: (Boolean) -> Unit,
+    onAutoOrientationToggle: (Boolean) -> Unit,
+    onResizeModeSelected: (com.example.model.AspectRatioMode) -> Unit,
+    onScaleSelected: (Float) -> Unit,
+    onOpenPortable: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = VTBlack,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.border(1.5.dp, VTDarkBorder, RoundedCornerShape(16.dp)),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.AspectRatio,
+                    contentDescription = null,
+                    tint = VTAccentBlue,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Screen Adjustments & Portable Video",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = VTWhite,
+                    fontSize = 17.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Auto Adjust Portable Screen
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(VTDarkCard)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Auto-Adjust Portable Screen",
+                            fontWeight = FontWeight.Bold,
+                            color = VTWhite,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Adapts mini player proportions to video (16:9, vertical 9:16, 4:3, or 21:9)",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = playerState.autoAdjustPortableScreen,
+                        onCheckedChange = onAutoAdjustToggle,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = VTAccentBlue,
+                            checkedTrackColor = VTAccentBlue.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+
+                // Auto Screen Orientation to Video
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(VTDarkCard)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Auto Screen Orientation",
+                            fontWeight = FontWeight.Bold,
+                            color = VTWhite,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Landscape for movies, Portrait for vertical videos",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = playerState.autoScreenOrientationToVideo,
+                        onCheckedChange = onAutoOrientationToggle,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = VTAccentBlue,
+                            checkedTrackColor = VTAccentBlue.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+
+                // Portable Window Size
+                Text("Portable Window Size Preset", fontWeight = FontWeight.Bold, color = VTWhite, fontSize = 13.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val scales = listOf(0.85f to "Compact (85%)", 1.0f to "Standard (100%)", 1.25f to "Large (125%)")
+                    scales.forEach { (scale, label) ->
+                        val isSelected = (kotlin.math.abs(playerState.portableWindowScale - scale) < 0.1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) VTAccentBlue.copy(alpha = 0.3f) else VTDarkCard)
+                                .border(1.dp, if (isSelected) VTAccentBlue else VTDarkBorder, RoundedCornerShape(8.dp))
+                                .clickable { onScaleSelected(scale) }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) VTAccentBlue else VTWhite
+                            )
+                        }
+                    }
+                }
+
+                // Screen Fit / Resize Mode
+                Text("Screen Fit / Zoom Mode", fontWeight = FontWeight.Bold, color = VTWhite, fontSize = 13.sp)
+                val modes = listOf(
+                    com.example.model.AspectRatioMode.FIT to ("Auto Fit" to "Shows entire video without crop (letterbox)"),
+                    com.example.model.AspectRatioMode.CROP_ZOOM to ("Auto Fill / Zoom" to "Fills the screen border-to-border"),
+                    com.example.model.AspectRatioMode.STRETCH to ("Stretch" to "Stretches to fill dimensions")
+                )
+                modes.forEach { (mode, info) ->
+                    val (label, desc) = info
+                    val isSelected = (playerState.portableResizeMode == mode)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) VTAccentBlue.copy(alpha = 0.2f) else VTDarkCard)
+                            .border(1.dp, if (isSelected) VTAccentBlue else VTDarkBorder, RoundedCornerShape(8.dp))
+                            .clickable { onResizeModeSelected(mode) }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(label, fontWeight = FontWeight.Bold, color = VTWhite, fontSize = 13.sp)
+                            Text(desc, color = Color.Gray, fontSize = 10.5.sp)
+                        }
+                        if (isSelected) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = VTAccentBlue, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+
+                // Quick Launch to Portable Player
+                Button(
+                    onClick = {
+                        onDismiss()
+                        onOpenPortable()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = VTAccentBlue, contentColor = VTWhite),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Filled.PictureInPictureAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Switch to Portable Mini Player", fontWeight = FontWeight.Bold)
                 }
             }
         },

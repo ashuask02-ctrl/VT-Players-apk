@@ -12,6 +12,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -186,6 +187,20 @@ class VTPlayerManager(
 
         override fun onTracksChanged(tracks: Tracks) {
             updateAvailableTracks(tracks)
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            if (videoSize.width > 0 && videoSize.height > 0) {
+                val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1.0f
+                val calculatedAspect = (videoSize.width.toFloat() * pixelRatio) / videoSize.height.toFloat()
+                _playerState.update {
+                    it.copy(
+                        videoWidth = videoSize.width,
+                        videoHeight = videoSize.height,
+                        videoAspectRatio = calculatedAspect
+                    )
+                }
+            }
         }
 
         override fun onPositionDiscontinuity(
@@ -1218,6 +1233,43 @@ class VTPlayerManager(
 
     fun toggleHardwareDecoding() {
         cycleDecoderMode()
+    }
+
+    fun setAutoAdjustPortableScreen(enabled: Boolean) {
+        _playerState.update { it.copy(autoAdjustPortableScreen = enabled) }
+    }
+
+    fun setAutoScreenOrientationToVideo(enabled: Boolean) {
+        _playerState.update { it.copy(autoScreenOrientationToVideo = enabled) }
+    }
+
+    fun setPortableWindowScale(scale: Float) {
+        _playerState.update { it.copy(portableWindowScale = scale.coerceIn(0.6f, 1.8f)) }
+    }
+
+    fun setPortableResizeMode(mode: AspectRatioMode) {
+        _playerState.update { it.copy(portableResizeMode = mode) }
+    }
+
+    fun cyclePortableResizeMode() {
+        val modes = listOf(AspectRatioMode.FIT, AspectRatioMode.CROP_ZOOM, AspectRatioMode.STRETCH)
+        val curIdx = modes.indexOf(_playerState.value.portableResizeMode)
+        val nextMode = modes[(curIdx + 1) % modes.size]
+        _playerState.update { it.copy(portableResizeMode = nextMode) }
+    }
+
+    fun cyclePortableScale() {
+        val cur = _playerState.value.portableWindowScale
+        val next = when {
+            cur < 0.95f -> 1.0f
+            cur < 1.15f -> 1.25f
+            else -> 0.85f
+        }
+        _playerState.update { it.copy(portableWindowScale = next) }
+    }
+
+    fun setShowPortableAdjustDialog(show: Boolean) {
+        _playerState.update { it.copy(showPortableAdjustDialog = show) }
     }
 
     fun release() {

@@ -45,6 +45,14 @@ data class VTPlayerState(
     // Movie Quality & Picture Filter
     val hwMovieQuality: HwMovieQuality = HwMovieQuality.ULTRA,
     val movieColorFilter: MovieColorFilter = MovieColorFilter.STANDARD,
+    // Video dimensions & Auto Screen Adjustments
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+    val videoAspectRatio: Float = 16f / 9f,
+    val autoAdjustPortableScreen: Boolean = true,
+    val autoScreenOrientationToVideo: Boolean = true,
+    val portableWindowScale: Float = 1.0f,
+    val portableResizeMode: AspectRatioMode = AspectRatioMode.FIT,
     // Delay offsets
     val subtitleDelayMs: Long = 0L,
     val audioDelayMs: Long = 0L,
@@ -69,9 +77,22 @@ data class VTPlayerState(
     val showDecoderDialog: Boolean = false,
     val showMovieQualityDialog: Boolean = false,
     val showAudioSettingsDialog: Boolean = false,
+    val showPortableAdjustDialog: Boolean = false,
     val showMoreMenu: Boolean = false,
     val resumePrompt: ResumePromptData? = null
 ) {
+    val isVerticalVideo: Boolean
+        get() = videoHeight > videoWidth && videoWidth > 0
+
+    val aspectRatioLabel: String
+        get() = when {
+            isVerticalVideo -> "9:16 Vertical"
+            videoAspectRatio > 2.0f -> "21:9 Cinema"
+            videoAspectRatio in 1.25f..1.45f -> "4:3 Standard"
+            videoAspectRatio in 0.95f..1.05f -> "1:1 Square"
+            else -> "16:9 Movie"
+        }
+
     val formattedCurrentTime: String
         get() = formatTime(currentPosition)
 

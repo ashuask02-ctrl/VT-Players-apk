@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Security
@@ -82,6 +84,8 @@ fun SettingsTab(
     var showDecoderDialog by remember { mutableStateOf(false) }
     var showHwQualityDialog by remember { mutableStateOf(false) }
     var showColorFilterDialog by remember { mutableStateOf(false) }
+    var showPortableSizeDialog by remember { mutableStateOf(false) }
+    var showPortableResizeDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -171,6 +175,7 @@ fun SettingsTab(
                         subtitle = when (prefs.movieOrientation) {
                             "VERTICAL" -> "Vertical (Portrait)"
                             "AUTO" -> "Auto Sensor (Follows device)"
+                            "AUTO_VIDEO" -> "Auto Match Video (Landscape for movies, Portrait for vertical)"
                             else -> "Horizontal (Landscape - Default)"
                         },
                         onClick = { showOrientationDialog = true }
@@ -210,6 +215,52 @@ fun SettingsTab(
                         onCheckedChange = { chk ->
                             viewModel.updatePreferences { it.copy(pauseOnCall = chk) }
                         }
+                    )
+                }
+            }
+
+            // Portable Video (Mini Player) & Screen Auto Adjustments
+            item {
+                SettingsSectionHeader("Portable Video & Screen Auto Adjustments", Icons.Filled.PictureInPictureAlt)
+                SettingsCard {
+                    SettingsSwitchRow(
+                        title = "Auto-Adjust Portable Screen",
+                        subtitle = "Automatically adapts floating mini player proportions to video dimensions (16:9, vertical 9:16, 4:3, or 21:9)",
+                        checked = prefs.autoAdjustPortableScreen,
+                        onCheckedChange = { chk ->
+                            viewModel.updatePreferences { it.copy(autoAdjustPortableScreen = chk) }
+                            viewModel.playerManager.setAutoAdjustPortableScreen(chk)
+                        }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsSwitchRow(
+                        title = "Auto Screen Orientation to Video",
+                        subtitle = "Automatically orients landscape for widescreen movies and portrait for vertical videos",
+                        checked = prefs.autoScreenOrientationToVideo,
+                        onCheckedChange = { chk ->
+                            viewModel.updatePreferences { it.copy(autoScreenOrientationToVideo = chk) }
+                            viewModel.playerManager.setAutoScreenOrientationToVideo(chk)
+                        }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "Portable Window Size Preset",
+                        subtitle = when (prefs.portableWindowSize) {
+                            "COMPACT" -> "Compact (85%)"
+                            "LARGE" -> "Large (125%)"
+                            else -> "Auto / Standard (100%)"
+                        },
+                        onClick = { showPortableSizeDialog = true }
+                    )
+                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "Portable Screen Fit Mode",
+                        subtitle = when (prefs.portableResizeMode) {
+                            "CROP_ZOOM" -> "Auto Fill / Zoom (Border to border)"
+                            "STRETCH" -> "Stretch (Fill dimensions)"
+                            else -> "Auto Fit (Letterbox - Preserve all)"
+                        },
+                        onClick = { showPortableResizeDialog = true }
                     )
                 }
             }
@@ -554,6 +605,7 @@ fun SettingsTab(
     // Movie Screen Orientation Dialog
     if (showOrientationDialog) {
         val orientations = listOf(
+            "AUTO_VIDEO" to ("Auto Match Video (Recommended)" to "Automatically adjusts: Landscape for widescreen cinema, Portrait for vertical videos/shorts"),
             "HORIZONTAL" to ("Horizontal (Landscape)" to "Plays movies horizontally. Recommended for widescreen cinema viewing"),
             "AUTO" to ("Auto Sensor" to "Screen flips horizontally or vertically depending on how you hold the device"),
             "VERTICAL" to ("Vertical (Portrait)" to "Plays videos upright vertically")
@@ -861,6 +913,146 @@ fun SettingsTab(
             confirmButton = {
                 Button(
                     onClick = { showColorFilterDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Portable Window Size Dialog
+    if (showPortableSizeDialog) {
+        val sizes = listOf(
+            "AUTO" to ("Auto / Standard (100%)" to "Default balanced floating video window size"),
+            "COMPACT" to ("Compact (85%)" to "Smaller floating footprint to keep more screen content visible"),
+            "LARGE" to ("Large (125%)" to "Expanded floating window for cinematic detail")
+        )
+        AlertDialog(
+            onDismissRequest = { showPortableSizeDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Portable Window Size Preset",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    sizes.forEach { (key, info) ->
+                        val (label, description) = info
+                        val isSelected = (key == prefs.portableWindowSize)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.updatePreferences { it.copy(portableWindowSize = key) }
+                                    val scale = when (key) {
+                                        "COMPACT" -> 0.85f
+                                        "LARGE" -> 1.25f
+                                        else -> 1.0f
+                                    }
+                                    viewModel.playerManager.setPortableWindowScale(scale)
+                                    showPortableSizeDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colorScheme.onSurface)
+                                Text(description, fontSize = 11.sp, color = colorScheme.onSurface.copy(alpha = 0.65f))
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showPortableSizeDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Portable Screen Fit / Resize Mode Dialog
+    if (showPortableResizeDialog) {
+        val modes = listOf(
+            "FIT" to ("Auto Fit (Letterbox)" to "Preserves full video frame without cropping any part"),
+            "CROP_ZOOM" to ("Auto Fill / Zoom" to "Fills the entire mini player screen border to border"),
+            "STRETCH" to ("Stretch" to "Stretches to fill dimensions without black borders")
+        )
+        AlertDialog(
+            onDismissRequest = { showPortableResizeDialog = false },
+            containerColor = colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.5.dp, colorScheme.outline, RoundedCornerShape(16.dp)),
+            title = {
+                Text(
+                    text = "Portable Screen Fit Mode",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colorScheme.onSurface,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    modes.forEach { (key, info) ->
+                        val (label, description) = info
+                        val isSelected = (key == prefs.portableResizeMode)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) colorScheme.primaryContainer else Color.Transparent)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    viewModel.updatePreferences { it.copy(portableResizeMode = key) }
+                                    val mode = when (key) {
+                                        "CROP_ZOOM" -> com.example.model.AspectRatioMode.CROP_ZOOM
+                                        "STRETCH" -> com.example.model.AspectRatioMode.STRETCH
+                                        else -> com.example.model.AspectRatioMode.FIT
+                                    }
+                                    viewModel.playerManager.setPortableResizeMode(mode)
+                                    showPortableResizeDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colorScheme.onSurface)
+                                Text(description, fontSize = 11.sp, color = colorScheme.onSurface.copy(alpha = 0.65f))
+                            }
+                            if (isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showPortableResizeDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary, contentColor = colorScheme.onPrimary)
                 ) {
                     Text("Close")

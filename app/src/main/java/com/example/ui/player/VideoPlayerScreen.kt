@@ -157,17 +157,10 @@ fun VideoPlayerScreen(
     var showSyncDialog by remember { mutableStateOf(false) }
     var showFrameStepper by remember { mutableStateOf(false) }
 
-    // Keep screen on during playback, auto-switch to horizontal (landscape) for movie playback, and hide status bar
-    DisposableEffect(prefs.hideStatusBarInPlayer, prefs.movieOrientation) {
+    // Keep screen on during playback, auto-switch to horizontal (landscape) for movie playback or auto-adjust to video format, and hide status bar
+    DisposableEffect(prefs.hideStatusBarInPlayer, prefs.movieOrientation, prefs.autoScreenOrientationToVideo) {
         val window = activity?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        // Movie Play Screen in VT Player: show Horizontal (Landscape) by default, not Vertical
-        when (prefs.movieOrientation) {
-            "VERTICAL" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            "AUTO" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            else -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
 
         val insetsController = window?.let { w ->
             WindowCompat.getInsetsController(w, w.decorView)
@@ -191,6 +184,26 @@ fun VideoPlayerScreen(
             // When exiting Player Screen (unless moving into mini player), pause immediately
             if (!viewModel.isMiniPlayer.value) {
                 playerManager.getExoPlayer()?.pause()
+            }
+        }
+    }
+
+    // Dynamic Auto Screen Orientation Adjustment
+    val autoAdjustOrientation = prefs.autoScreenOrientationToVideo || prefs.movieOrientation == "AUTO_VIDEO"
+    LaunchedEffect(playerState.videoWidth, playerState.videoHeight, prefs.movieOrientation, autoAdjustOrientation) {
+        if (autoAdjustOrientation && playerState.videoWidth > 0 && playerState.videoHeight > 0) {
+            if (playerState.videoHeight > playerState.videoWidth) {
+                // Vertical / Portrait video (shorts, reels, vertical recordings) -> Auto Orient Portrait
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } else {
+                // Horizontal movie -> Auto Orient Landscape
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+        } else {
+            when (prefs.movieOrientation) {
+                "VERTICAL" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                "AUTO" -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                else -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
         }
     }
@@ -704,6 +717,7 @@ fun VideoPlayerScreen(
                     onAudioTracksClick = { playerManager.setShowTracksDialog(true) },
                     onSubtitlesClick = { playerManager.setShowTracksDialog(true) },
                     onMovieQualityClick = { playerManager.setShowMovieQualityDialog(true) },
+                    onPortableAdjustClick = { playerManager.setShowPortableAdjustDialog(true) },
                     onDecoderClick = {
                         val nextMode = playerManager.cycleDecoderMode()
                         viewModel.updatePreferences { it.copy(defaultDecoderMode = nextMode.name) }
@@ -984,6 +998,37 @@ fun VideoPlayerScreen(
         )
     }
 
+    if (playerState.showPortableAdjustDialog) {
+        PortableScreenAdjustDialog(
+            playerState = playerState,
+            onAutoAdjustToggle = { enabled ->
+                playerManager.setAutoAdjustPortableScreen(enabled)
+                viewModel.updatePreferences { it.copy(autoAdjustPortableScreen = enabled) }
+            },
+            onAutoOrientationToggle = { enabled ->
+                playerManager.setAutoScreenOrientationToVideo(enabled)
+                viewModel.updatePreferences { it.copy(autoScreenOrientationToVideo = enabled) }
+            },
+            onResizeModeSelected = { mode ->
+                playerManager.setPortableResizeMode(mode)
+                viewModel.updatePreferences { it.copy(portableResizeMode = mode.name) }
+            },
+            onScaleSelected = { scale ->
+                playerManager.setPortableWindowScale(scale)
+                val key = when {
+                    scale < 0.95f -> "COMPACT"
+                    scale > 1.15f -> "LARGE"
+                    else -> "STANDARD"
+                }
+                viewModel.updatePreferences { it.copy(portableWindowSize = key) }
+            },
+            onOpenPortable = {
+                onMinimize()
+            },
+            onDismiss = { playerManager.setShowPortableAdjustDialog(false) }
+        )
+    }
+
     if (showSyncDialog) {
         SubtitleAndAudioSyncDialog(
             playerManager = playerManager,
@@ -1010,6 +1055,7 @@ fun PlayerTopBar(
     onAudioTracksClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
     onMovieQualityClick: () -> Unit = {},
+    onPortableAdjustClick: () -> Unit = {},
     onDecoderClick: () -> Unit = {},
     onAudioSettingsClick: () -> Unit = {},
     onToggleHardwareDecoding: () -> Unit = onDecoderClick,
@@ -1162,6 +1208,26 @@ fun PlayerTopBar(
                 )
             }
 
+            // Auto Screen Adjustments Badge (e.g. 16:9 Movie / 9:16 Vertical)
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A2332))
+                    .border(1.dp, Color(0xFF2C4A6F), RoundedCornerShape(6.dp))
+                    .clickable(onClick = onPortableAdjustClick)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .testTag("screen_auto_adjust_badge"),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = playerState.aspectRatioLabel,
+                    color = VTAccentBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.5.sp
+                )
+            }
+
             // 1X Speed Toggle
             Box(
                 modifier = Modifier
@@ -1306,6 +1372,19 @@ fun PlayerTopBar(
                         onClick = {
                             showMenu = false
                             onSyncClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text("Screen & Portable Adjustments", color = VTWhite, fontWeight = FontWeight.Bold)
+                                Text("Auto Aspect / Orientation / Sizing", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        },
+                        leadingIcon = { Icon(Icons.Filled.AspectRatio, contentDescription = null, tint = VTAccentBlue) },
+                        onClick = {
+                            showMenu = false
+                            onPortableAdjustClick()
                         }
                     )
                     DropdownMenuItem(

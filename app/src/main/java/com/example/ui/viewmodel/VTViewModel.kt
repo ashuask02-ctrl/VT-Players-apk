@@ -305,6 +305,21 @@ class VTViewModel(application: Application) : AndroidViewModel(application) {
             }
             playerManager.setMovieColorFilter(preferredFilter)
 
+            playerManager.setAutoAdjustPortableScreen(prefs.autoAdjustPortableScreen)
+            playerManager.setAutoScreenOrientationToVideo(prefs.autoScreenOrientationToVideo)
+            val preferredResizeMode = try {
+                com.example.model.AspectRatioMode.valueOf(prefs.portableResizeMode)
+            } catch (e: Exception) {
+                com.example.model.AspectRatioMode.FIT
+            }
+            playerManager.setPortableResizeMode(preferredResizeMode)
+            val preferredScale = when (prefs.portableWindowSize) {
+                "COMPACT" -> 0.85f
+                "LARGE" -> 1.25f
+                else -> 1.0f
+            }
+            playerManager.setPortableWindowScale(preferredScale)
+
             val inMemoryPos = _lastStoppedPositions[video.uriString]
             val record = repository.getRecordByUri(video.uriString)
             val savedPos = inMemoryPos ?: record?.lastPosition ?: video.lastPosition

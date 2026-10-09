@@ -94,4 +94,54 @@ class ExampleUnitTest {
     assertTrue(filters.contains(com.example.model.MovieColorFilter.VIVID))
     assertTrue(filters.contains(com.example.model.MovieColorFilter.WARM))
   }
+
+  @Test
+  fun autoAdjustScreenPortableVideo_preferencesAndStateCalculations() {
+    val defaultPrefs = PlayerPreferencesEntity()
+    assertTrue("Auto adjust portable screen should be enabled by default", defaultPrefs.autoAdjustPortableScreen)
+    assertTrue("Auto screen orientation to video should be enabled by default", defaultPrefs.autoScreenOrientationToVideo)
+    assertEquals("AUTO", defaultPrefs.portableWindowSize)
+    assertEquals("FIT", defaultPrefs.portableResizeMode)
+
+    // Test aspect ratio calculation and orientation detection in VTPlayerState
+    val landscapeState = com.example.player.VTPlayerState(
+        videoWidth = 1920,
+        videoHeight = 1080,
+        videoAspectRatio = 1920f / 1080f
+    )
+    assertFalse(landscapeState.isVerticalVideo)
+    assertEquals("16:9 Movie", landscapeState.aspectRatioLabel)
+
+    val verticalState = com.example.player.VTPlayerState(
+        videoWidth = 1080,
+        videoHeight = 1920,
+        videoAspectRatio = 1080f / 1920f
+    )
+    assertTrue(verticalState.isVerticalVideo)
+    assertEquals("9:16 Vertical", verticalState.aspectRatioLabel)
+
+    val cinemaState = com.example.player.VTPlayerState(
+        videoWidth = 2560,
+        videoHeight = 1080,
+        videoAspectRatio = 2560f / 1080f
+    )
+    assertFalse(cinemaState.isVerticalVideo)
+    assertEquals("21:9 Cinema", cinemaState.aspectRatioLabel)
+
+    val squareState = com.example.player.VTPlayerState(
+        videoWidth = 1080,
+        videoHeight = 1080,
+        videoAspectRatio = 1.0f
+    )
+    assertFalse(squareState.isVerticalVideo)
+    assertEquals("1:1 Square", squareState.aspectRatioLabel)
+
+    val tvState = com.example.player.VTPlayerState(
+        videoWidth = 1440,
+        videoHeight = 1080,
+        videoAspectRatio = 4f / 3f
+    )
+    assertFalse(tvState.isVerticalVideo)
+    assertEquals("4:3 Standard", tvState.aspectRatioLabel)
+  }
 }

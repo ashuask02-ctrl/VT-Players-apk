@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         PlaylistItemEntity::class,
         PlayerPreferencesEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class VTDatabase : RoomDatabase() {
